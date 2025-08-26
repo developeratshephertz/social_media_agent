@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* App base styles */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Utility layers */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
