@@ -78,7 +78,7 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 DATABASE_URL=sqlite:///./data/social_media.db
 ```
 
-### Running with Docker (Recommended)
+### Running with Docker
 
 ```bash
 # Start all services
