@@ -267,32 +267,3 @@ python -m pytest          # Run tests (if tests exist)
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Support
-
-For support, please open an issue on GitHub or contact the development team.
-
-## 🔄 Changelog
-
-### Version 3.0.0
-- Added AI-powered content generation
-- Implemented Facebook integration
-- Added Google Calendar sync
-- Modern React UI with Tailwind CSS
-- Docker containerization
-- Background job scheduling
-
-## 🚧 Roadmap
-
-- [ ] Instagram integration
-- [ ] Twitter/X integration
-- [ ] Advanced analytics dashboard
-- [ ] Content templates library
-- [ ] Multi-user support
-- [ ] Mobile application
-- [ ] Advanced AI models integration
-- [ ] Social media listening features
-
----
-
-Made with ❤️ by the Social Media Agent Team
