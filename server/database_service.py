@@ -28,7 +28,8 @@ class DatabaseService:
         image_path: str = None,
         scheduled_at: datetime = None,
         campaign_id: str = None,
-        platform: str = "instagram",
+        platforms: List[str] = None,
+        subreddit: str = None,
         status: str = None,
         batch_id: str = None
     ) -> str:
@@ -37,9 +38,9 @@ class DatabaseService:
             # Insert post
             query = """
                 INSERT INTO posts (id, campaign_id, original_description, caption, 
-                                 image_path, scheduled_at, platform, status, batch_id)
+                                 image_path, scheduled_at, platforms, subreddit, status, batch_id)
                 VALUES (:id, :campaign_id, :description, :caption, :image_path, 
-                       :scheduled_at, :platform, :status, :batch_id)
+                       :scheduled_at, :platforms, :subreddit, :status, :batch_id)
                 RETURNING id
             """
             post_id = str(uuid.uuid4())
@@ -50,7 +51,8 @@ class DatabaseService:
                 "caption": caption,
                 "image_path": image_path,
                 "scheduled_at": scheduled_at,
-                "platform": platform,
+                "platforms": platforms,
+                "subreddit": subreddit,
                 "status": status or ("draft" if not scheduled_at else "scheduled"),
                 "batch_id": batch_id
             }
@@ -323,7 +325,7 @@ class DatabaseService:
         try:
             query = """
                 SELECT p.id, p.original_description, p.caption, p.image_path,
-                       p.status, p.platform, p.scheduled_at, p.created_at, p.batch_id,
+                       p.status, p.platforms, p.scheduled_at, p.created_at, p.batch_id,
                        c.name as campaign_name
                 FROM posts p
                 LEFT JOIN campaigns c ON p.campaign_id = c.id
@@ -344,13 +346,12 @@ class DatabaseService:
         try:
             query = """
                 SELECT p.id, p.original_description, p.caption, p.image_path,
-                       p.scheduled_at, p.platform,
-                       ps.status as schedule_status, ps.priority
+                       p.scheduled_at, p.platforms, p.subreddit, p.status
                 FROM posts p
-                JOIN posting_schedules ps ON p.id = ps.post_id
-                WHERE ps.status = 'pending' 
-                  AND ps.scheduled_at <= NOW() + INTERVAL '1 day'
-                ORDER BY ps.scheduled_at ASC, ps.priority ASC
+                WHERE p.status = 'scheduled' 
+                  AND p.scheduled_at IS NOT NULL
+                  AND p.scheduled_at <= NOW() + INTERVAL '1 day'
+                ORDER BY p.scheduled_at ASC
             """
             
             results = await db_manager.fetch_all(query)
@@ -374,6 +375,73 @@ class DatabaseService:
         except Exception as e:
             print(f"Error getting batch operation: {e}")
             return None
+    
+    @staticmethod
+    async def get_posts_by_batch_id(batch_id: str) -> List[Dict[str, Any]]:
+        """Get all posts for a specific batch ID"""
+        try:
+            query = """
+                SELECT p.id, p.original_description, p.caption, p.image_path,
+                       p.status, p.platforms, p.scheduled_at, p.created_at, p.batch_id,
+                       c.name as campaign_name
+                FROM posts p
+                LEFT JOIN campaigns c ON p.campaign_id = c.id
+                WHERE p.batch_id = :batch_id
+                ORDER BY p.created_at ASC
+            """
+            
+            results = await db_manager.fetch_all(query, {"batch_id": batch_id})
+            return [dict(row) for row in results]
+            
+        except Exception as e:
+            print(f"Error getting posts by batch ID: {e}")
+            return []
+    
+    @staticmethod
+    async def schedule_batch_posts(
+        batch_id: str,
+        platforms: List[str],
+        schedule_times: List[str],
+        days: int
+    ) -> bool:
+        """Schedule all posts in a batch with specified platforms and times"""
+        try:
+            # Get all posts in the batch
+            posts = await DatabaseService.get_posts_by_batch_id(batch_id)
+            
+            if not posts:
+                raise Exception("No posts found in batch")
+            
+            # Update each post with platforms and scheduled time
+            for i, post in enumerate(posts):
+                if i < len(schedule_times):
+                    scheduled_at = schedule_times[i]
+                    
+                    # Update post with platforms and scheduled time
+                    update_query = """
+                        UPDATE posts 
+                        SET platforms = :platforms, scheduled_at = :scheduled_at, status = 'scheduled'
+                        WHERE id = :post_id
+                    """
+                    
+                    await db_manager.execute_query(update_query, {
+                        "platforms": platforms,
+                        "scheduled_at": scheduled_at,
+                        "post_id": post['id']
+                    })
+                    
+                    # Create posting schedule record
+                    await DatabaseService.save_posting_schedule(
+                        post_id=post['id'],
+                        scheduled_at=scheduled_at,
+                        platforms=platforms
+                    )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error scheduling batch posts: {e}")
+            return False
     
     @staticmethod
     async def get_default_campaign_id() -> Optional[str]:
@@ -421,7 +489,7 @@ class DatabaseService:
         """Get posts that are scheduled and due for publishing"""
         try:
             query = """
-                SELECT id, platform, caption, image_path, scheduled_at, original_description
+                SELECT id, platforms, caption, image_path, scheduled_at, original_description
                 FROM posts 
                 WHERE status = 'scheduled' 
                   AND scheduled_at <= NOW() 
@@ -452,7 +520,7 @@ class DatabaseService:
         """Get recently published posts"""
         try:
             query = """
-                SELECT id, platform, caption, posted_at, engagement_metrics
+                SELECT id, platforms, caption, posted_at, engagement_metrics
                 FROM posts 
                 WHERE status = 'published' 
                 ORDER BY posted_at DESC
@@ -465,6 +533,62 @@ class DatabaseService:
         except Exception as e:
             print(f"Error getting recent published posts: {e}")
             return []
+    
+    @staticmethod
+    async def delete_post(post_id: str) -> bool:
+        """Delete a post and all its associated data"""
+        try:
+            # Delete in order: schedules -> captions -> images -> post
+            # This avoids foreign key constraint issues
+            
+            # Delete posting schedules
+            await db_manager.execute_query(
+                "DELETE FROM posting_schedules WHERE post_id = :post_id",
+                {"post_id": post_id}
+            )
+            
+            # Delete captions
+            await db_manager.execute_query(
+                "DELETE FROM captions WHERE post_id = :post_id",
+                {"post_id": post_id}
+            )
+            
+            # Get image paths before deleting (to clean up files)
+            image_query = "SELECT file_path FROM images WHERE post_id = :post_id"
+            image_results = await db_manager.fetch_all(image_query, {"post_id": post_id})
+            
+            # Delete images from database
+            await db_manager.execute_query(
+                "DELETE FROM images WHERE post_id = :post_id",
+                {"post_id": post_id}
+            )
+            
+            # Delete the post itself
+            result = await db_manager.execute_query(
+                "DELETE FROM posts WHERE id = :post_id",
+                {"post_id": post_id}
+            )
+            
+            # Clean up image files from disk
+            if image_results:
+                for row in image_results:
+                    file_path = row['file_path']
+                    if file_path and file_path.startswith('/public/'):
+                        # Remove leading slash and try to delete file
+                        local_path = file_path[1:]  # Remove leading slash
+                        try:
+                            if os.path.exists(local_path):
+                                os.remove(local_path)
+                                print(f"Deleted image file: {local_path}")
+                        except Exception as file_error:
+                            print(f"Warning: Could not delete image file {local_path}: {file_error}")
+            
+            print(f"Successfully deleted post {post_id} and associated data")
+            return True
+            
+        except Exception as e:
+            print(f"Error deleting post {post_id}: {e}")
+            return False
 
 
 # Global service instance

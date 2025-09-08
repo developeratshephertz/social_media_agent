@@ -307,7 +307,7 @@ const Calendar = ({
         view={currentView}
         onView={(view) => setCurrentView(view)}
         views={["month", "week", "day", "agenda"]}
-        popup
+        popup={false}
         showMultiDayTimes
       />
 

@@ -14,6 +14,21 @@ CREATE TABLE campaigns (
     is_active BOOLEAN DEFAULT TRUE
 );
 
+-- Create batch_operations table first (before posts table that references it)
+CREATE TABLE batch_operations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    description TEXT NOT NULL,
+    num_posts INTEGER NOT NULL,
+    days_duration INTEGER NOT NULL,
+    status VARCHAR(50) DEFAULT 'in_progress', -- in_progress, completed, failed, cancelled
+    posts_generated INTEGER DEFAULT 0,
+    posts_failed INTEGER DEFAULT 0,
+    error_messages TEXT[],
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE,
+    created_by VARCHAR(100) -- user identifier
+);
+
 -- Create posts table to store individual social media posts
 CREATE TABLE posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -26,7 +41,8 @@ CREATE TABLE posts (
     scheduled_at TIMESTAMP WITH TIME ZONE,
     posted_at TIMESTAMP WITH TIME ZONE,
     status VARCHAR(50) DEFAULT 'draft', -- draft, scheduled, posted, failed
-    platform VARCHAR(50) DEFAULT 'instagram', -- instagram, facebook, twitter, etc.
+    platforms TEXT[], -- Array of platforms for multi-platform posting (instagram, facebook, twitter, reddit)
+    subreddit VARCHAR(100), -- For Reddit posts - target subreddit
     engagement_metrics JSONB, -- likes, comments, shares, etc.
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -80,25 +96,12 @@ CREATE TABLE posting_schedules (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create batch_operations table to track bulk generation requests
-CREATE TABLE batch_operations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    description TEXT NOT NULL,
-    num_posts INTEGER NOT NULL,
-    days_duration INTEGER NOT NULL,
-    status VARCHAR(50) DEFAULT 'in_progress', -- in_progress, completed, failed, cancelled
-    posts_generated INTEGER DEFAULT 0,
-    posts_failed INTEGER DEFAULT 0,
-    error_messages TEXT[],
-    started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    completed_at TIMESTAMP WITH TIME ZONE,
-    created_by VARCHAR(100) -- user identifier
-);
+-- batch_operations table moved above (before posts table)
 
 -- Create calendar_events table for calendar integration
 CREATE TABLE calendar_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    post_id VARCHAR(255), -- references campaign/post ID from frontend
+    post_id UUID REFERENCES posts(id) ON DELETE CASCADE, -- proper foreign key to posts table
     title VARCHAR(500) NOT NULL,
     description TEXT,
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -123,6 +126,8 @@ CREATE INDEX idx_posts_campaign_id ON posts(campaign_id);
 CREATE INDEX idx_posts_batch_id ON posts(batch_id);
 CREATE INDEX idx_posts_scheduled_at ON posts(scheduled_at);
 CREATE INDEX idx_posts_status ON posts(status);
+CREATE INDEX idx_posts_platforms ON posts USING GIN (platforms);
+CREATE INDEX idx_posts_subreddit ON posts(subreddit);
 CREATE INDEX idx_posts_created_at ON posts(created_at);
 
 CREATE INDEX idx_images_post_id ON images(post_id);

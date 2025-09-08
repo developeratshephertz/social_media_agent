@@ -11,7 +11,15 @@ node_modules
 dist
 dist-ssr
 *.local
+# Environment variables and secrets
 .env
+.env.*
+token.json
+Credentials.json
+*.key
+*.pem
+*.p12
+secrets/
 
 # Editor directories and files
 .vscode/*

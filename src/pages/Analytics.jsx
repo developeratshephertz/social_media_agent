@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Card from "../components/ui/Card.jsx";
+import Dropdown from "../components/ui/Dropdown.jsx";
 import analyticsService from "../services/analyticsService.js";
 
 function Analytics() {
@@ -15,44 +16,846 @@ function Analytics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState("all");
+  const [selectedCampaign, setSelectedCampaign] = useState("all");
+
+  // Platform options for dropdown
+  const platformOptions = [
+    {
+      value: "all",
+      label: "All Platforms",
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+        </svg>
+      )
+    },
+    {
+      value: "facebook",
+      label: "Facebook",
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+        </svg>
+      )
+    },
+    {
+      value: "twitter",
+      label: "Twitter",
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z" />
+        </svg>
+      )
+    },
+    {
+      value: "reddit",
+      label: "Reddit",
+      icon: (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z" />
+        </svg>
+      )
+    }
+  ];
+
+  // Platform-specific campaign options
+  const getCampaignOptions = (platform) => {
+    const baseOptions = [
+      {
+        value: "all",
+        label: "All Campaigns",
+        icon: (
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+          </svg>
+        )
+      }
+    ];
+
+    switch (platform) {
+      case "facebook":
+        return [
+          ...baseOptions,
+          {
+            value: "fifa_world_cup",
+            label: "FIFA World Cup 2026",
+            icon: (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+            )
+          },
+          {
+            value: "office_behind_scenes",
+            label: "Office Behind Scenes",
+            icon: (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+              </svg>
+            )
+          }
+        ];
+
+      case "twitter":
+        return [
+          ...baseOptions,
+          {
+            value: "product_launch",
+            label: "Product Launch",
+            icon: (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+              </svg>
+            )
+          },
+          {
+            value: "startup_lessons",
+            label: "Startup Lessons Thread",
+            icon: (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd" />
+              </svg>
+            )
+          }
+        ];
+
+      case "reddit":
+        return [
+          ...baseOptions,
+          {
+            value: "nike_sale",
+            label: "Nike Sale Alert",
+            icon: (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+              </svg>
+            )
+          },
+          {
+            value: "screen_time_til",
+            label: "Screen Time TIL",
+            icon: (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            )
+          }
+        ];
+
+      case "all":
+      default:
+        return [
+          ...baseOptions,
+          {
+            value: "cross_platform",
+            label: "Cross-Platform Campaign",
+            icon: (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+              </svg>
+            )
+          }
+        ];
+    }
+  };
+
+  const campaignOptions = getCampaignOptions(selectedPlatform);
+
+  // Reset campaign selection when platform changes
+  useEffect(() => {
+    setSelectedCampaign("all");
+  }, [selectedPlatform]);
 
   useEffect(() => {
     loadAnalyticsData();
-  }, []);
+  }, [selectedPlatform, selectedCampaign]);
+
+  // Transform Twitter data to match Facebook analytics format exactly
+  const transformTwitterData = (accountInfo, accountAnalytics, myTweets) => {
+    const account = accountInfo.success ? accountInfo.account : {};
+    const analytics = accountAnalytics.success ? accountAnalytics.analytics : {};
+    const tweets = myTweets.success ? myTweets.tweets : [];
+
+    // Calculate totals
+    const totalTweets = tweets.length;
+    const totalLikes = tweets.reduce((sum, tweet) => sum + (tweet.like_count || 0), 0);
+    const totalRetweets = tweets.reduce((sum, tweet) => sum + (tweet.retweet_count || 0), 0);
+    const totalReplies = tweets.reduce((sum, tweet) => sum + (tweet.reply_count || 0), 0);
+    const totalImpressions = tweets.reduce((sum, tweet) => sum + (tweet.impression_count || 0), 0);
+
+    // Calculate engagement metrics
+    const avgLikes = totalTweets > 0 ? Math.round(totalLikes / totalTweets) : 0;
+    const avgRetweets = totalTweets > 0 ? Math.round(totalRetweets / totalTweets) : 0;
+    const avgReplies = totalTweets > 0 ? Math.round(totalReplies / totalTweets) : 0;
+    const avgImpressions = totalTweets > 0 ? Math.round(totalImpressions / totalTweets) : 0;
+
+    // Get top performing tweets
+    const topTweets = tweets
+      .sort((a, b) => (b.like_count + b.retweet_count) - (a.like_count + a.retweet_count))
+      .slice(0, 5);
+
+    // Format tweets for display - match Facebook format exactly
+    const formattedTweets = tweets.map(tweet => ({
+      id: tweet.id,
+      message: tweet.text || 'No content',
+      created_time: tweet.created_at,
+      reach: tweet.impression_count || 0,
+      impressions: tweet.impression_count || 0,
+      engaged_users: (tweet.like_count || 0) + (tweet.retweet_count || 0) + (tweet.reply_count || 0),
+      engagement_rate: tweet.impression_count > 0 ? ((tweet.like_count + tweet.retweet_count + tweet.reply_count) / tweet.impression_count) : 0,
+      reactions: {
+        like: tweet.like_count || 0,
+        retweet: tweet.retweet_count || 0,
+        reply: tweet.reply_count || 0,
+        quote: tweet.quote_count || 0
+      },
+      url: tweet.url
+    }));
+
+    // Return data in exact Facebook format
+    return {
+      overview: {
+        totals: {
+          followers: account.followers_count || 0,
+          impressions: totalImpressions,
+          reach: totalImpressions,
+          engagement_rate: avgImpressions > 0 ? ((avgLikes + avgRetweets + avgReplies) / avgImpressions) * 100 : 0,
+          best_post: topTweets[0]?.id || "none"
+        },
+        metrics_available: true,
+        configured: accountInfo.success
+      },
+      followers: {
+        followers: account.followers_count || 0,
+        configured: accountInfo.success
+      },
+      demographics: {
+        by_country: {}, // Twitter doesn't provide country data in free tier
+        by_age_gender: {}, // Twitter doesn't provide demographic data in free tier
+        by_hashtag: {} // Could be added later
+      },
+      posts: {
+        posts: formattedTweets,
+        configured: myTweets.success
+      },
+      bestPost: {
+        post: topTweets[0] ? {
+          id: topTweets[0].id,
+          message: topTweets[0].text || 'No content',
+          reach: topTweets[0].impression_count || 0,
+          impressions: topTweets[0].impression_count || 0,
+          engaged_users: (topTweets[0].like_count || 0) + (topTweets[0].retweet_count || 0) + (topTweets[0].reply_count || 0),
+          engagement_rate: topTweets[0].impression_count > 0 ? ((topTweets[0].like_count + topTweets[0].retweet_count + topTweets[0].reply_count) / topTweets[0].impression_count) : 0
+        } : {},
+        configured: myTweets.success
+      },
+      worstPost: {
+        post: topTweets[topTweets.length - 1] ? {
+          id: topTweets[topTweets.length - 1].id,
+          message: topTweets[topTweets.length - 1].text || 'No content',
+          reach: topTweets[topTweets.length - 1].impression_count || 0,
+          impressions: topTweets[topTweets.length - 1].impression_count || 0,
+          engaged_users: (topTweets[topTweets.length - 1].like_count || 0) + (topTweets[topTweets.length - 1].retweet_count || 0) + (topTweets[topTweets.length - 1].reply_count || 0),
+          engagement_rate: topTweets[topTweets.length - 1].impression_count > 0 ? ((topTweets[topTweets.length - 1].like_count + topTweets[topTweets.length - 1].retweet_count + topTweets[topTweets.length - 1].reply_count) / topTweets[topTweets.length - 1].impression_count) : 0
+        } : {},
+        configured: myTweets.success
+      },
+      status: {
+        configured: accountInfo.success,
+        account_info: account,
+        summary: analytics.summary || {}
+      }
+    };
+  };
+
+  // Transform Reddit data to match Facebook analytics format exactly
+  const transformRedditData = (accountInfo, accountAnalytics, myPosts, myComments) => {
+    const account = accountInfo.success ? accountInfo.account : {};
+    const analytics = accountAnalytics.success ? accountAnalytics.analytics : {};
+    const posts = myPosts.success ? myPosts.posts : [];
+    const comments = myComments.success ? myComments.comments : [];
+
+    // Calculate totals
+    const totalPosts = posts.length;
+    const totalComments = comments.length;
+    const totalKarma = account.total_karma || 0;
+    const linkKarma = account.link_karma || 0;
+    const commentKarma = account.comment_karma || 0;
+
+    // Calculate engagement metrics
+    const totalPostScore = posts.reduce((sum, post) => sum + (post.score || 0), 0);
+    const totalPostComments = posts.reduce((sum, post) => sum + (post.num_comments || 0), 0);
+    const avgPostScore = totalPosts > 0 ? Math.round(totalPostScore / totalPosts) : 0;
+    const avgPostComments = totalPosts > 0 ? Math.round(totalPostComments / totalPosts) : 0;
+
+    // Get top performing posts
+    const topPosts = posts
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, 5);
+
+    // Get subreddit distribution
+    const subredditDistribution = {};
+    posts.forEach(post => {
+      const subreddit = post.subreddit || 'unknown';
+      subredditDistribution[subreddit] = (subredditDistribution[subreddit] || 0) + 1;
+    });
+
+    // Format posts for display - match Facebook format exactly
+    const formattedPosts = posts.map(post => ({
+      id: post.id,
+      message: post.title || post.selftext || 'No content',
+      created_time: new Date(post.created_utc * 1000).toISOString(),
+      reach: post.score || 0,
+      impressions: post.score || 0, // Reddit doesn't provide impressions
+      engaged_users: post.num_comments || 0,
+      engagement_rate: post.score > 0 ? (post.num_comments / post.score) : 0,
+      reactions: {
+        upvote: post.score || 0,
+        downvote: 0, // Reddit doesn't provide downvote count
+        comment: post.num_comments || 0
+      },
+      subreddit: post.subreddit,
+      permalink: post.permalink,
+      url: post.url
+    }));
+
+    // Return data in exact Facebook format
+    return {
+      overview: {
+        totals: {
+          followers: totalKarma, // Using karma as a proxy for followers
+          impressions: totalPostScore,
+          reach: totalPostScore,
+          engagement_rate: avgPostComments > 0 ? (avgPostComments / avgPostScore) * 100 : 0,
+          best_post: topPosts[0]?.id || "none"
+        },
+        metrics_available: true,
+        configured: accountInfo.success
+      },
+      followers: {
+        followers: totalKarma,
+        configured: accountInfo.success
+      },
+      demographics: {
+        by_country: {}, // Reddit doesn't provide country data
+        by_age_gender: {}, // Reddit doesn't provide demographic data
+        by_subreddit: subredditDistribution
+      },
+      posts: {
+        posts: formattedPosts,
+        configured: myPosts.success
+      },
+      bestPost: {
+        post: topPosts[0] ? {
+          id: topPosts[0].id,
+          message: topPosts[0].title || topPosts[0].selftext || 'No content',
+          reach: topPosts[0].score || 0,
+          impressions: topPosts[0].score || 0,
+          engaged_users: topPosts[0].num_comments || 0,
+          engagement_rate: topPosts[0].score > 0 ? (topPosts[0].num_comments / topPosts[0].score) : 0
+        } : {},
+        configured: myPosts.success
+      },
+      worstPost: {
+        post: topPosts[topPosts.length - 1] ? {
+          id: topPosts[topPosts.length - 1].id,
+          message: topPosts[topPosts.length - 1].title || topPosts[topPosts.length - 1].selftext || 'No content',
+          reach: topPosts[topPosts.length - 1].score || 0,
+          impressions: topPosts[topPosts.length - 1].score || 0,
+          engaged_users: topPosts[topPosts.length - 1].num_comments || 0,
+          engagement_rate: topPosts[topPosts.length - 1].score > 0 ? (topPosts[topPosts.length - 1].num_comments / topPosts[topPosts.length - 1].score) : 0
+        } : {},
+        configured: myPosts.success
+      },
+      status: {
+        configured: accountInfo.success,
+        account_info: account,
+        summary: analytics.summary || {}
+      }
+    };
+  };
 
   const loadAnalyticsData = async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // Load all analytics data
-      const [overview, followers, demographics, posts, bestPost, worstPost, status] = await Promise.all([
-        analyticsService.getAnalyticsOverview(),
-        analyticsService.getFollowers(), 
-        analyticsService.getDemographics(),
-        analyticsService.getPostsAnalytics(10),
-        analyticsService.getBestPost(),
-        analyticsService.getWorstPost(), 
-        analyticsService.getAnalyticsStatus()
-      ]);
-      
-      setAnalyticsData({
-        overview,
-        followers,
-        demographics,
-        posts,
-        bestPost,
-        worstPost,
-        status
-      });
-      
-      setIsConfigured(status.configured);
-      
+
+      if (selectedPlatform === "facebook") {
+        // Use real Facebook API for Facebook platform
+        const [overview, followers, demographics, posts, bestPost, worstPost, status] = await Promise.all([
+          analyticsService.getAnalyticsOverview(),
+          analyticsService.getFollowers(),
+          analyticsService.getDemographics(),
+          analyticsService.getPostsAnalytics(10),
+          analyticsService.getBestPost(),
+          analyticsService.getWorstPost(),
+          analyticsService.getAnalyticsStatus()
+        ]);
+
+        setAnalyticsData({
+          overview,
+          followers,
+          demographics,
+          posts,
+          bestPost,
+          worstPost,
+          status
+        });
+
+        setIsConfigured(status.configured);
+      } else if (selectedPlatform === "reddit") {
+        // Use Reddit API for Reddit platform (with fallback to mock data)
+        try {
+          const [accountInfo, accountAnalytics, myPosts, myComments] = await Promise.all([
+            fetch('http://localhost:8000/api/reddit/account/info').then(r => r.json()),
+            fetch('http://localhost:8000/api/reddit/account/analytics').then(r => r.json()),
+            fetch('http://localhost:8000/api/reddit/posts/my?limit=10').then(r => r.json()),
+            fetch('http://localhost:8000/api/reddit/comments/my?limit=10').then(r => r.json())
+          ]);
+
+          // Check if Reddit API is working
+          if (accountInfo.success && accountAnalytics.success) {
+            // Transform Reddit data to match expected format
+            const redditData = transformRedditData(accountInfo, accountAnalytics, myPosts, myComments);
+            setAnalyticsData(redditData);
+            setIsConfigured(true);
+          } else {
+            // Fallback to mock data if API fails
+            const redditMockData = getRedditMockData();
+            setAnalyticsData(redditMockData);
+            setIsConfigured(false);
+          }
+        } catch (error) {
+          // Fallback to mock data if API fails
+          const redditMockData = getRedditMockData();
+          setAnalyticsData(redditMockData);
+          setIsConfigured(false);
+        }
+      } else if (selectedPlatform === "twitter") {
+        // Use Twitter API for Twitter platform (with fallback to mock data)
+        try {
+          const [accountInfo, accountAnalytics, myTweets] = await Promise.all([
+            fetch('http://localhost:8000/api/twitter/account/info').then(r => r.json()),
+            fetch('http://localhost:8000/api/twitter/account/analytics').then(r => r.json()),
+            fetch('http://localhost:8000/api/twitter/posts/my?limit=10').then(r => r.json())
+          ]);
+
+          // Check if Twitter API is working
+          if (accountInfo.success && accountAnalytics.success) {
+            // Transform Twitter data to match expected format
+            const twitterData = transformTwitterData(accountInfo, accountAnalytics, myTweets);
+            setAnalyticsData(twitterData);
+            setIsConfigured(true);
+
+            // Check if account is private
+            if (myTweets.success && myTweets.message && myTweets.message.includes('private')) {
+              setAnalyticsData(prev => ({
+                ...prev,
+                posts: {
+                  ...prev.posts,
+                  posts: [],
+                  configured: true,
+                  private_account: true
+                }
+              }));
+            }
+
+            // Check if data is cached/fallback
+            if (myTweets.success && myTweets.cached) {
+              setAnalyticsData(prev => ({
+                ...prev,
+                posts: {
+                  ...prev.posts,
+                  configured: true,
+                  cached: true,
+                  cache_message: myTweets.message || "Showing cached data"
+                }
+              }));
+            }
+          } else {
+            // Fallback to mock data if API fails
+            const twitterMockData = getTwitterMockData();
+            setAnalyticsData(twitterMockData);
+            setIsConfigured(false);
+          }
+        } catch (error) {
+          // Fallback to mock data if API fails
+          const twitterMockData = getTwitterMockData();
+          setAnalyticsData(twitterMockData);
+          setIsConfigured(false);
+        }
+      } else {
+        // Use mock data for other platforms
+        const platformData = getPlatformMockData(selectedPlatform);
+        setAnalyticsData(platformData);
+        setIsConfigured(selectedPlatform === "all" ? false : true);
+      }
+
     } catch (err) {
       console.error('Error loading analytics data:', err);
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Twitter-specific mock data that matches Facebook format exactly
+  const getTwitterMockData = () => {
+    return {
+      overview: {
+        totals: {
+          followers: 0, // Real data shows 0 followers
+          impressions: 0, // Not available in free tier
+          reach: 0, // Not available in free tier
+          engagement_rate: 0,
+          best_post: "none"
+        },
+        metrics_available: false,
+        configured: true
+      },
+      followers: {
+        followers: 0, // Real data shows 0 followers
+        configured: true
+      },
+      demographics: {
+        by_country: {}, // Not available in free tier
+        by_age_gender: {}, // Not available in free tier
+        by_hashtag: {} // Could be added later
+      },
+      posts: {
+        posts: [], // No tweets accessible with current API level
+        configured: true
+      },
+      bestPost: {
+        post: {},
+        configured: true
+      },
+      worstPost: {
+        post: {},
+        configured: true
+      },
+      status: {
+        configured: true,
+        account_info: {
+          username: "shephertz1",
+          name: "shephertz",
+          followers_count: 0,
+          following_count: 2,
+          tweet_count: 8,
+          verified: false,
+          description: ""
+        },
+        summary: {
+          total_tweets: 8,
+          total_followers: 0,
+          total_following: 2
+        }
+      }
+    };
+  };
+
+  // Reddit-specific mock data that matches Facebook format exactly
+  const getRedditMockData = () => {
+    return {
+      overview: {
+        totals: {
+          followers: 1250, // Using karma as proxy for followers
+          impressions: 45320,
+          reach: 32100,
+          engagement_rate: 4.2,
+          best_post: "rd_post_001"
+        },
+        metrics_available: true,
+        configured: false
+      },
+      followers: {
+        followers: 1250,
+        configured: false
+      },
+      demographics: {
+        by_country: {}, // Reddit doesn't provide country data
+        by_age_gender: {}, // Reddit doesn't provide demographic data
+        by_subreddit: {
+          "AskReddit": 5,
+          "technology": 3,
+          "programming": 2,
+          "webdev": 2,
+          "startups": 1
+        }
+      },
+      posts: {
+        posts: [
+          {
+            id: "rd_post_001",
+            message: "SWEET DEAL ALERT ⚡ Get ready to SPRINT to savings! Nike shoes now 50% OFF! 🛍️ #NikeSale #ShoeGameStrong #SaleAlert #RunningDeals",
+            created_time: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+            reach: 4200,
+            impressions: 6800,
+            engaged_users: 525,
+            engagement_rate: 0.125,
+            reactions: {
+              upvote: 420,
+              downvote: 15,
+              comment: 90
+            },
+            subreddit: "deals",
+            permalink: "/r/deals/comments/rd_post_001/",
+            url: "https://reddit.com/r/deals/comments/rd_post_001/"
+          },
+          {
+            id: "rd_post_002",
+            message: "TIL: The average person spends 2.5 hours daily on social media. What's your screen time looking like? 📱",
+            created_time: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
+            reach: 3800,
+            impressions: 5200,
+            engaged_users: 380,
+            engagement_rate: 0.10,
+            reactions: {
+              upvote: 320,
+              downvote: 8,
+              comment: 52
+            },
+            subreddit: "todayilearned",
+            permalink: "/r/todayilearned/comments/rd_post_002/",
+            url: "https://reddit.com/r/todayilearned/comments/rd_post_002/"
+          },
+          {
+            id: "rd_post_003",
+            message: "Just launched our new product! 🚀 The response has been incredible. Thank you to everyone who supported us! #ProductLaunch #Innovation #Tech",
+            created_time: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            reach: 2500,
+            impressions: 3200,
+            engaged_users: 140,
+            engagement_rate: 0.0437,
+            reactions: {
+              upvote: 200,
+              downvote: 5,
+              comment: 30
+            },
+            subreddit: "startups",
+            permalink: "/r/startups/comments/rd_post_003/",
+            url: "https://reddit.com/r/startups/comments/rd_post_003/"
+          }
+        ],
+        configured: false
+      },
+      bestPost: {
+        post: {
+          id: "rd_post_001",
+          message: "SWEET DEAL ALERT ⚡ Get ready to SPRINT to savings! Nike shoes now 50% OFF! 🛍️ #NikeSale #ShoeGameStrong #SaleAlert #RunningDeals",
+          reach: 4200,
+          impressions: 6800,
+          engaged_users: 525,
+          engagement_rate: 0.125
+        },
+        configured: false
+      },
+      worstPost: {
+        post: {
+          id: "rd_post_003",
+          message: "Just launched our new product! 🚀 The response has been incredible. Thank you to everyone who supported us! #ProductLaunch #Innovation #Tech",
+          reach: 2500,
+          impressions: 3200,
+          engaged_users: 140,
+          engagement_rate: 0.0437
+        },
+        configured: false
+      },
+      status: {
+        configured: false,
+        account_info: {
+          name: "shephertz01",
+          total_karma: 1250,
+          link_karma: 800,
+          comment_karma: 450,
+          created_utc: 1640995200, // Jan 1, 2022
+          is_gold: false,
+          is_mod: false,
+          verified: false
+        },
+        summary: {
+          total_posts: 3,
+          total_comments: 15,
+          avg_score: 313,
+          total_karma: 1250
+        }
+      }
+    };
+  };
+
+  // Platform-specific mock data
+  const getPlatformMockData = (platform) => {
+    const baseData = {
+      status: { configured: platform !== "all" }
+    };
+
+    switch (platform) {
+      case "twitter":
+        return {
+          ...baseData,
+          overview: {
+            totals: {
+              followers: 3200,
+              impressions: 125000,
+              reach: 89000,
+              engagement_rate: 6.8,
+              best_post: "tw_post_001"
+            }
+          },
+          followers: { followers: 3200, configured: true },
+          demographics: {
+            by_country: { "US": 60, "UK": 15, "Canada": 10, "India": 8, "Other": 7 },
+            by_age_gender: {
+              "M.18-24": 25, "F.18-24": 22,
+              "M.25-34": 30, "F.25-34": 28,
+              "M.35-44": 15, "F.35-44": 12
+            }
+          },
+          posts: {
+            posts: [
+              {
+                id: "tw_post_001",
+                message: "Just launched our new product! 🚀 The response has been incredible. Thank you to everyone who supported us! #ProductLaunch #Innovation #Tech",
+                created_time: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+                reach: 8500,
+                impressions: 12000,
+                engaged_users: 680,
+                engagement_rate: 0.0567,
+                reactions: { like: 420, retweet: 180, reply: 80 }
+              },
+              {
+                id: "tw_post_002",
+                message: "Thread: 5 lessons I learned building this startup 🧵 1/ First, always validate your idea before building...",
+                created_time: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString(),
+                reach: 6200,
+                impressions: 8900,
+                engaged_users: 445,
+                engagement_rate: 0.0718,
+                reactions: { like: 280, retweet: 120, reply: 45 }
+              }
+            ],
+            configured: true
+          },
+          bestPost: {
+            post: {
+              id: "tw_post_002",
+              message: "Thread: 5 lessons I learned building this startup 🧵 1/ First, always validate your idea before building...",
+              reach: 6200,
+              impressions: 8900,
+              engaged_users: 445,
+              engagement_rate: 0.0718
+            },
+            configured: true
+          },
+          worstPost: {
+            post: {
+              id: "tw_post_001",
+              message: "Just launched our new product! 🚀 The response has been incredible. Thank you to everyone who supported us! #ProductLaunch #Innovation #Tech",
+              reach: 8500,
+              impressions: 12000,
+              engaged_users: 680,
+              engagement_rate: 0.0567
+            },
+            configured: true
+          }
+        };
+
+      case "reddit":
+        return {
+          ...baseData,
+          overview: {
+            totals: {
+              followers: 850,
+              impressions: 45000,
+              reach: 32000,
+              engagement_rate: 12.5,
+              best_post: "rd_post_001"
+            }
+          },
+          followers: { followers: 850, configured: true },
+          demographics: {
+            by_country: { "US": 70, "UK": 12, "Canada": 8, "Germany": 5, "Other": 5 },
+            by_age_gender: {
+              "M.18-24": 35, "F.18-24": 15,
+              "M.25-34": 40, "F.25-34": 20,
+              "M.35-44": 25, "F.35-44": 10
+            }
+          },
+          posts: {
+            posts: [
+              {
+                id: "rd_post_001",
+                message: "SWEET DEAL ALERT ⚡ Get ready to SPRINT to savings! Nike shoes now 50% OFF! 🛍️ #NikeSale #ShoeGameStrong #SaleAlert #RunningDeals",
+                created_time: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+                reach: 4200,
+                impressions: 6800,
+                engaged_users: 525,
+                engagement_rate: 0.125,
+                reactions: { upvote: 420, downvote: 15, comment: 90 }
+              },
+              {
+                id: "rd_post_002",
+                message: "TIL: The average person spends 2.5 hours daily on social media. What's your screen time looking like? 📱",
+                created_time: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
+                reach: 3800,
+                impressions: 5200,
+                engaged_users: 380,
+                engagement_rate: 0.10,
+                reactions: { upvote: 320, downvote: 8, comment: 52 }
+              }
+            ],
+            configured: true
+          },
+          bestPost: {
+            post: {
+              id: "rd_post_001",
+              message: "SWEET DEAL ALERT ⚡ Get ready to SPRINT to savings! Nike shoes now 50% OFF! 🛍️ #NikeSale #ShoeGameStrong #SaleAlert #RunningDeals",
+              reach: 4200,
+              impressions: 6800,
+              engaged_users: 525,
+              engagement_rate: 0.125
+            },
+            configured: true
+          },
+          worstPost: {
+            post: {
+              id: "rd_post_002",
+              message: "TIL: The average person spends 2.5 hours daily on social media. What's your screen time looking like? 📱",
+              reach: 3800,
+              impressions: 5200,
+              engaged_users: 380,
+              engagement_rate: 0.10
+            },
+            configured: true
+          }
+        };
+
+      case "all":
+      default:
+        return {
+          ...baseData,
+          overview: {
+            totals: {
+              followers: 0,
+              impressions: 0,
+              reach: 0,
+              engagement_rate: 0,
+              best_post: null
+            }
+          },
+          followers: { followers: 0, configured: false },
+          demographics: {
+            by_country: {},
+            by_age_gender: {}
+          },
+          posts: {
+            posts: [],
+            configured: false
+          },
+          bestPost: null,
+          worstPost: null
+        };
     }
   };
 
@@ -88,22 +891,123 @@ function Analytics() {
     );
   }
 
+  // Show platform selection if no platform is selected
+  if (selectedPlatform === "all") {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-semibold">Analytics</h1>
+
+          {/* Platform dropdown */}
+          <Dropdown
+            options={platformOptions}
+            value={selectedPlatform}
+            onChange={setSelectedPlatform}
+            placeholder="Select Platform"
+          />
+        </div>
+
+        {/* Platform Selection Interface */}
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="text-center max-w-lg">
+            {/* Enhanced Icon with gradient background */}
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+
+            {/* Enhanced Typography */}
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Choose a Platform</h2>
+            <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+              Select a social media platform from the dropdown above to view analytics and performance data.
+            </p>
+
+            {/* Platform Cards Preview - Now Clickable */}
+            <div className="grid grid-cols-3 gap-4 mb-8">
+              <button
+                onClick={() => setSelectedPlatform('facebook')}
+                className="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 cursor-pointer group"
+              >
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200">
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700 transition-colors duration-200">Facebook</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedPlatform('twitter')}
+                className="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 cursor-pointer group"
+              >
+                <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200">
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z" />
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700 transition-colors duration-200">Twitter</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedPlatform('reddit')}
+                className="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 cursor-pointer group"
+              >
+                <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200">
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.858-.896 3.305-2.189 4.34-.98.78-2.267 1.244-3.768 1.244-2.954 0-5.355-2.401-5.355-5.355 0-.42.048-.83.138-1.224.8.09 1.536.22 2.189.39-.8-.48-1.328-1.24-1.328-2.14 0-.48.12-.93.33-1.32.9.11 1.69.35 2.4.7-.75-.8-1.86-1.3-3.07-1.3-2.33 0-4.22 1.89-4.22 4.22 0 .33.04.65.11.96-3.51-.18-6.62-1.86-8.7-4.42-.36.63-.57 1.36-.57 2.14 0 1.47.75 2.77 1.89 3.53-.7-.02-1.36-.21-1.94-.53v.05c0 2.05 1.46 3.76 3.4 4.15-.36.1-.73.15-1.12.15-.27 0-.54-.03-.8-.08.54 1.69 2.11 2.92 3.97 2.95-1.45 1.14-3.28 1.82-5.27 1.82-.34 0-.68-.02-1.02-.06 1.88 1.21 4.12 1.91 6.52 1.91 7.82 0 12.09-6.48 12.09-12.09 0-.18 0-.37-.01-.56.83-.6 1.55-1.35 2.12-2.2z" />
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700 transition-colors duration-200">Reddit</span>
+              </button>
+            </div>
+
+            {/* Enhanced Call to Action */}
+            {/* <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-center text-blue-800">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm font-medium">Click the dropdown above to get started</span>
+              </div>
+            </div> */}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Analytics</h1>
-        
+
         <div className="flex items-center gap-4">
           {/* Status indicator */}
           <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${
-              isConfigured ? 'bg-green-500' : 'bg-yellow-500'
-            }`}></div>
+            <div className={`w-3 h-3 rounded-full ${isConfigured ? 'bg-green-500' : 'bg-yellow-500'
+              }`}></div>
             <span className="text-sm text-gray-600">
               {isConfigured ? 'Live Data' : 'Demo Data'}
             </span>
           </div>
-          
+
+          {/* Campaign dropdown */}
+          <Dropdown
+            options={campaignOptions}
+            value={selectedCampaign}
+            onChange={setSelectedCampaign}
+            placeholder="Select Campaign"
+          />
+
+          {/* Platform dropdown */}
+          <Dropdown
+            options={platformOptions}
+            value={selectedPlatform}
+            onChange={setSelectedPlatform}
+            placeholder="Select Platform"
+          />
+
           {/* Refresh button */}
           <button
             onClick={refreshData}
@@ -130,15 +1034,15 @@ function Analytics() {
           </div>
           <div className="text-sm text-gray-500">Total page followers</div>
         </Card>
-        
+
         <Card title="Impressions">
           <div className="text-2xl font-semibold">
             {formatNumber(safeGet(analyticsData.overview, 'totals.impressions', 0))}
           </div>
           <div className="text-sm text-gray-500">Post impressions</div>
         </Card>
-        
-        
+
+
         <Card title="Reach">
           <div className="text-2xl font-semibold">
             {formatNumber(safeGet(analyticsData.overview, 'totals.reach', 0))}
@@ -149,42 +1053,137 @@ function Analytics() {
 
       {/* Demographics Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Audience by Country">
+        <Card title={selectedPlatform === "reddit" ? "Posts by Subreddit" : selectedPlatform === "twitter" ? "Account Statistics" : "Audience by Country"}>
           <div className="space-y-2">
-            {analyticsData.demographics?.by_country && Object.keys(analyticsData.demographics.by_country).length > 0 ? (
-              Object.entries(analyticsData.demographics.by_country)
-                .sort(([,a], [,b]) => b - a)
-                .slice(0, 5)
-                .map(([country, count]) => (
-                  <div key={country} className="flex justify-between items-center">
-                    <span className="text-gray-700">{country}</span>
-                    <span className="font-semibold">{formatNumber(count)}</span>
+            {selectedPlatform === "reddit" ? (
+              analyticsData.demographics?.by_subreddit && Object.keys(analyticsData.demographics.by_subreddit).length > 0 ? (
+                Object.entries(analyticsData.demographics.by_subreddit)
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, 5)
+                  .map(([subreddit, count]) => (
+                    <div key={subreddit} className="flex justify-between items-center">
+                      <span className="text-gray-700">r/{subreddit}</span>
+                      <span className="font-semibold">{formatNumber(count)} posts</span>
+                    </div>
+                  ))
+              ) : (
+                <div className="text-gray-500 text-center py-4">
+                  No subreddit data available
+                </div>
+              )
+            ) : selectedPlatform === "twitter" ? (
+              analyticsData.status?.account_info ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Total Tweets</span>
+                    <span className="font-semibold">{formatNumber(analyticsData.status.account_info.tweet_count || 0)}</span>
                   </div>
-                ))
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Following</span>
+                    <span className="font-semibold">{formatNumber(analyticsData.status.account_info.following_count || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Verified</span>
+                    <span className="font-semibold">{analyticsData.status.account_info.verified ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Username</span>
+                    <span className="font-semibold">@{analyticsData.status.account_info.username}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-gray-500 text-center py-4">
+                  No account data available
+                </div>
+              )
             ) : (
-              <div className="text-gray-500 text-center py-4">
-                No country data available
-              </div>
+              analyticsData.demographics?.by_country && Object.keys(analyticsData.demographics.by_country).length > 0 ? (
+                Object.entries(analyticsData.demographics.by_country)
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, 5)
+                  .map(([country, count]) => (
+                    <div key={country} className="flex justify-between items-center">
+                      <span className="text-gray-700">{country}</span>
+                      <span className="font-semibold">{formatNumber(count)}</span>
+                    </div>
+                  ))
+              ) : (
+                <div className="text-gray-500 text-center py-4">
+                  No country data available
+                </div>
+              )
             )}
           </div>
         </Card>
 
-        <Card title="Audience by Age & Gender">
+        <Card title={selectedPlatform === "reddit" ? "Account Statistics" : selectedPlatform === "twitter" ? "API Access Info" : "Audience by Age & Gender"}>
           <div className="space-y-2">
-            {analyticsData.demographics?.by_age_gender && Object.keys(analyticsData.demographics.by_age_gender).length > 0 ? (
-              Object.entries(analyticsData.demographics.by_age_gender)
-                .sort(([,a], [,b]) => b - a)
-                .slice(0, 6)
-                .map(([segment, count]) => (
-                  <div key={segment} className="flex justify-between items-center">
-                    <span className="text-gray-700">{segment}</span>
-                    <span className="font-semibold">{formatNumber(count)}</span>
+            {selectedPlatform === "reddit" ? (
+              analyticsData.status?.account_info ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Total Karma</span>
+                    <span className="font-semibold">{formatNumber(analyticsData.status.account_info.total_karma || 0)}</span>
                   </div>
-                ))
-            ) : (
-              <div className="text-gray-500 text-center py-4">
-                No demographic data available
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Link Karma</span>
+                    <span className="font-semibold">{formatNumber(analyticsData.status.account_info.link_karma || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Comment Karma</span>
+                    <span className="font-semibold">{formatNumber(analyticsData.status.account_info.comment_karma || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Account Age</span>
+                    <span className="font-semibold">
+                      {analyticsData.status.account_info.created_utc ?
+                        Math.floor((Date.now() - analyticsData.status.account_info.created_utc * 1000) / (1000 * 60 * 60 * 24)) + ' days' :
+                        'Unknown'
+                      }
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-gray-500 text-center py-4">
+                  No account data available
+                </div>
+              )
+            ) : selectedPlatform === "twitter" ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700">API Access Level</span>
+                  <span className="font-semibold text-yellow-600">Free Tier</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700">Tweets Access</span>
+                  <span className="font-semibold text-red-600">Limited</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700">Analytics Available</span>
+                  <span className="font-semibold text-green-600">Basic</span>
+                </div>
+                <div className="text-sm text-gray-500 mt-2">
+                  <p>• Account info: ✅ Available</p>
+                  <p>• Tweet content: ❌ Restricted</p>
+                  <p>• Engagement metrics: ❌ Restricted</p>
+                </div>
               </div>
+            ) : (
+              analyticsData.demographics?.by_age_gender && Object.keys(analyticsData.demographics.by_age_gender).length > 0 ? (
+                Object.entries(analyticsData.demographics.by_age_gender)
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, 6)
+                  .map(([segment, count]) => (
+                    <div key={segment} className="flex justify-between items-center">
+                      <span className="text-gray-700">{segment}</span>
+                      <span className="font-semibold">{formatNumber(count)}</span>
+                    </div>
+                  ))
+              ) : (
+                <div className="text-gray-500 text-center py-4">
+                  No demographic data available
+                </div>
+              )
             )}
           </div>
         </Card>
@@ -266,11 +1265,59 @@ function Analytics() {
         <Card title="Recent Posts Performance">
           <div className="space-y-4">
             {analyticsData.posts.posts.slice(0, 5).map((post, index) => {
-              // Use actual engagement data from Facebook API
-              const totalLikes = post.reactions_count || 0;
-              const actualComments = post.comments_count || 0;
-              const actualShares = post.shares_count || 0;
-              
+              // Platform-specific engagement metrics
+              let engagementMetrics = [];
+
+              if (selectedPlatform === "twitter") {
+                const likes = post.reactions?.like || 0;
+                const retweets = post.reactions?.retweet || 0;
+                const replies = post.reactions?.reply || 0;
+                const shares = post.reactions?.share || 0;
+
+                engagementMetrics = [
+                  { label: "Reach", value: post.reach },
+                  { label: "Likes", value: likes },
+                  { label: "Retweets", value: retweets },
+                  { label: "Replies", value: replies }
+                ];
+              } else if (selectedPlatform === "reddit") {
+                const upvotes = post.reactions?.upvote || 0;
+                const downvotes = post.reactions?.downvote || 0;
+                const comments = post.reactions?.comment || 0;
+
+                engagementMetrics = [
+                  { label: "Reach", value: post.reach },
+                  { label: "Upvotes", value: upvotes },
+                  { label: "Downvotes", value: downvotes },
+                  { label: "Comments", value: comments }
+                ];
+              } else if (selectedPlatform === "facebook") {
+                // Facebook real data - use actual Facebook API response structure
+                const totalLikes = post.reactions_count || 0;
+                const actualComments = post.comments_count || 0;
+                const actualShares = post.shares_count || 0;
+
+                engagementMetrics = [
+                  { label: "Reach", value: post.reach },
+                  { label: "Likes", value: totalLikes },
+                  { label: "Comments", value: actualComments },
+                  { label: "Shares", value: actualShares }
+                ];
+              } else {
+                // All Platforms
+                const likes = post.reactions?.like || 0;
+                const loves = post.reactions?.love || 0;
+                const comments = post.reactions?.comment || 0;
+                const shares = post.reactions?.share || 0;
+
+                engagementMetrics = [
+                  { label: "Reach", value: post.reach },
+                  { label: "Likes", value: likes },
+                  { label: "Comments", value: comments },
+                  { label: "Shares", value: shares }
+                ];
+              }
+
               return (
                 <div key={post.id || index} className="border-b border-gray-200 pb-3 last:border-b-0">
                   <div className="flex justify-between items-start mb-2">
@@ -279,22 +1326,12 @@ function Analytics() {
                     </div>
                   </div>
                   <div className="grid grid-cols-4 gap-3 text-xs text-gray-500">
-                    <div>
-                      <span>Reach: </span>
-                      <span className="font-semibold text-gray-700">{formatNumber(post.reach)}</span>
-                    </div>
-                    <div>
-                      <span>Likes: </span>
-                      <span className="font-semibold text-gray-700">{formatNumber(totalLikes)}</span>
-                    </div>
-                    <div>
-                      <span>Comments: </span>
-                      <span className="font-semibold text-gray-700">{formatNumber(actualComments)}</span>
-                    </div>
-                    <div>
-                      <span>Shares: </span>
-                      <span className="font-semibold text-gray-700">{formatNumber(actualShares)}</span>
-                    </div>
+                    {engagementMetrics.map((metric, idx) => (
+                      <div key={idx}>
+                        <span>{metric.label}: </span>
+                        <span className="font-semibold text-gray-700">{formatNumber(metric.value)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
@@ -314,8 +1351,22 @@ function Analytics() {
             </div>
             <div className="ml-3">
               <p className="text-sm text-yellow-800">
-                <strong>Demo Mode:</strong> Facebook analytics not configured. Showing sample data. 
-                Add your PAGE_ID and ACCESS_TOKEN to the server/.env file to see real Facebook data.
+                <strong>Demo Mode:</strong> {
+                  selectedPlatform === "reddit" ? "Reddit analytics not configured. Showing sample data." :
+                    selectedPlatform === "twitter" ?
+                      (analyticsData.posts?.cached ?
+                        `Twitter analytics showing ${analyticsData.posts.cache_message || "cached data"} due to rate limits.` :
+                        "Twitter analytics showing real account data but limited by API access level.") :
+                      "Facebook analytics not configured. Showing sample data."
+                }
+                {selectedPlatform === "reddit" ?
+                  " Add your REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, and REDDIT_ACCESS_TOKEN to the server/.env file to see real Reddit data." :
+                  selectedPlatform === "twitter" ?
+                    (analyticsData.posts?.cached ?
+                      " Data will refresh automatically when rate limits reset." :
+                      " Twitter account data is real, but tweet content requires higher API access level.") :
+                    " Add your PAGE_ID and ACCESS_TOKEN to the server/.env file to see real Facebook data."
+                }
               </p>
             </div>
           </div>

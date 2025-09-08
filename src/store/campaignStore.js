@@ -11,14 +11,14 @@ export const useCampaignStore = create((set, get) => ({
     notifications: true,
   },
   isLoading: false,
-  
+
   // Load campaigns from PostgreSQL
   loadCampaignsFromDB: async () => {
     set({ isLoading: true });
     try {
       const response = await fetch("http://localhost:8000/api/posts?limit=50");
       const data = await response.json();
-      
+
       if (data.success && data.posts) {
         const campaigns = data.posts.map(post => ({
           id: post.id,
@@ -27,9 +27,10 @@ export const useCampaignStore = create((set, get) => ({
           productDescription: post.original_description,
           generatedContent: post.caption || "",
           scheduledAt: post.scheduled_at,
-          status: post.scheduled_at && (post.status === "scheduled" || post.status === "Scheduled") ? "Scheduled" : 
-                 (post.status === "posted" || post.status === "Posted") ? "Posted" : 
-                 (post.status === "failed" || post.status === "Failed") ? "Failed" : "Draft",
+          status: post.scheduled_at && (post.status === "scheduled" || post.status === "Scheduled") ? "Scheduled" :
+            (post.status === "posted" || post.status === "Posted" || post.status === "published") ? "Posted" :
+              (post.status === "partially_published") ? "Partially Posted" :
+                (post.status === "failed" || post.status === "Failed") ? "Failed" : "Draft",
           imageUrl: post.image_path ? `http://localhost:8000${post.image_path}` : "",
           // Add additional fields from database if they exist
           driveFileId: post.drive_file_id || null,
@@ -46,12 +47,16 @@ export const useCampaignStore = create((set, get) => ({
               time: new Date(post.created_at).getTime() + 3000,
               text: `Scheduled for ${new Date(post.scheduled_at).toLocaleString()}`,
             } : null,
+            post.posted_at ? {
+              time: new Date(post.posted_at).getTime(),
+              text: `Posted to ${post.platforms ? post.platforms.join(', ') : 'social media'}`,
+            } : null,
           ].filter(Boolean),
         }));
-        
+
         set({ campaigns });
         console.log(`✅ Loaded ${campaigns.length} campaigns from database`);
-        
+
         // Store in localStorage as backup
         try {
           localStorage.setItem('campaigns_backup', JSON.stringify(campaigns));
@@ -121,17 +126,19 @@ export const useCampaignStore = create((set, get) => ({
         imageUrl ? { time: Date.now(), text: "AI image generated" } : null,
         scheduledAt
           ? {
-              time: Date.now(),
-              text: `Scheduled for ${new Date(scheduledAt).toLocaleString()}`,
-            }
+            time: Date.now(),
+            text: `Scheduled for ${new Date(scheduledAt).toLocaleString()}`,
+          }
           : null,
       ].filter(Boolean),
     };
-    
+
     // Add to local state immediately
     set((state) => ({ campaigns: [newCampaign, ...state.campaigns] }));
     get().addActivity(`Created campaign ${id}`);
-    
+
+    console.log(`✅ Created campaign ${id} with batchId: ${batchId}`, newCampaign);
+
     // Try to sync with database
     try {
       const postData = {
@@ -140,10 +147,10 @@ export const useCampaignStore = create((set, get) => ({
         image_path: imageUrl?.replace('http://localhost:8000', '') || null,
         scheduled_at: scheduledAt,
         status: status.toLowerCase(),
-        platform: "instagram",
+        platforms: ["instagram"],
         batch_id: batchId
       };
-      
+
       console.log(`Saving campaign ${id} to database:`, postData);
       // Note: We're not awaiting this to avoid blocking UI, but we should handle errors
       fetch("http://localhost:8000/api/posts", {
@@ -164,7 +171,7 @@ export const useCampaignStore = create((set, get) => ({
     } catch (error) {
       console.error("Error syncing campaign with database:", error);
     }
-    
+
     return id;
   },
   updateCampaign: async (id, updates) => {
@@ -174,7 +181,7 @@ export const useCampaignStore = create((set, get) => ({
         c.id === id ? { ...c, ...updates } : c
       ),
     }));
-    
+
     // Try to sync with database if this is a scheduling update
     if (updates.scheduledAt || updates.status) {
       try {
@@ -182,9 +189,10 @@ export const useCampaignStore = create((set, get) => ({
         if (campaign) {
           const postData = {
             scheduled_at: updates.scheduledAt || campaign.scheduledAt,
-            status: (updates.status || campaign.status).toLowerCase()
+            status: (updates.status || campaign.status).toLowerCase(),
+            platforms: updates.platforms || campaign.platforms
           };
-          
+
           console.log(`Updating campaign ${id} in database:`, postData);
           // Note: We're not awaiting this to avoid blocking UI
           fetch(`http://localhost:8000/api/posts/${id}`, {
@@ -220,41 +228,19 @@ export const useCampaignStore = create((set, get) => ({
     set((state) => ({
       campaigns: state.campaigns.filter((c) => !predicate(c)),
     })),
-  // Simulate real-time status updates
+  // Real-time status updates - only refresh from database, no fake posting
   tick: () => {
-    const now = Date.now();
-    set((state) => ({
-      campaigns: state.campaigns.map((c) => {
-        if (
-          c.status === "Scheduled" &&
-          c.scheduledAt &&
-          new Date(c.scheduledAt).getTime() <= now
-        ) {
-          const didFail = Math.random() < 0.1;
-          const status = didFail ? "Failed" : "Posted";
-          return {
-            ...c,
-            status,
-            activity: [
-              {
-                time: now,
-                text: status === "Posted" ? "Post published" : "Posting failed",
-              },
-              ...(c.activity || []),
-            ],
-          };
-        }
-        return c;
-      }),
-    }));
+    // Remove fake posting simulation - let the backend scheduler handle real posting
+    // The frontend should only display the actual status from the database
   },
 }));
 
-// Start a simple interval for real-time updates
+// Start a simple interval for real-time updates - refresh from database
 if (typeof window !== "undefined") {
   setInterval(() => {
     try {
-      useCampaignStore.getState().tick();
-    } catch {}
-  }, 5000);
+      // Refresh campaigns from database to get real status updates
+      useCampaignStore.getState().loadCampaignsFromDB();
+    } catch { }
+  }, 10000); // Check every 10 seconds instead of 5
 }

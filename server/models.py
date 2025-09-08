@@ -26,7 +26,7 @@ class Campaign(Base):
     posts = relationship("Post", back_populates="campaign", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Campaign(id={self.id}, name='{self.name}')>"
+        return f"<Campaign(id={self.id}, name={self.name})>"
 
 
 class Post(Base):
@@ -42,7 +42,7 @@ class Post(Base):
     scheduled_at = Column(DateTime(timezone=True))
     posted_at = Column(DateTime(timezone=True))
     status = Column(String(50), default="draft")  # draft, scheduled, posted, failed
-    platform = Column(String(50), default="instagram")
+    platforms = Column(ARRAY(String), nullable=True)  # Array of platforms for multi-platform posting
     batch_id = Column(String(100))  # For grouping posts in batches
     engagement_metrics = Column(JSON)  # Store engagement data as JSON
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -55,7 +55,7 @@ class Post(Base):
     posting_schedules = relationship("PostingSchedule", back_populates="post", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Post(id={self.id}, status='{self.status}', platform='{self.platform}')>"
+        return f"<Post(id={self.id}, status={self.status}, platforms={self.platforms})>"
 
 
 class Image(Base):
@@ -79,7 +79,7 @@ class Image(Base):
     post = relationship("Post", back_populates="images")
     
     def __repr__(self):
-        return f"<Image(id={self.id}, file_name='{self.file_name}', method='{self.generation_method}')>"
+        return f"<Image(id={self.id}, file_name={self.file_name}, method={self.generation_method})>"
 
 
 class Caption(Base):
@@ -101,7 +101,7 @@ class Caption(Base):
     post = relationship("Post", back_populates="captions")
     
     def __repr__(self):
-        return f"<Caption(id={self.id}, method='{self.generation_method}', active={self.is_active})>"
+        return f"<Caption(id={self.id}, method={self.generation_method}, active={self.is_active})>"
 
 
 class PostingSchedule(Base):
@@ -127,7 +127,7 @@ class PostingSchedule(Base):
     post = relationship("Post", back_populates="posting_schedules")
     
     def __repr__(self):
-        return f"<PostingSchedule(id={self.id}, status='{self.status}', scheduled_at={self.scheduled_at})>"
+        return f"<PostingSchedule(id={self.id}, status={self.status}, scheduled_at={self.scheduled_at})>"
 
 
 class BatchOperation(Base):
@@ -147,7 +147,7 @@ class BatchOperation(Base):
     created_by = Column(String(100))  # user identifier
     
     def __repr__(self):
-        return f"<BatchOperation(id={self.id}, status='{self.status}', posts={self.posts_generated}/{self.num_posts})>"
+        return f"<BatchOperation(id={self.id}, status={self.status}, posts={self.posts_generated}/{self.num_posts})>"
 
 
 class CalendarEvent(Base):
@@ -178,7 +178,7 @@ class CalendarEvent(Base):
     post = relationship("Post", backref="calendar_events")
     
     def __repr__(self):
-        return f"<CalendarEvent(id={self.id}, title='{self.title}', status='{self.status}')>"
+        return f"<CalendarEvent(id={self.id}, title={self.title}, status={self.status})>"
 
 
 # Pydantic models for API responses
@@ -260,7 +260,7 @@ class PostResponse(BaseModel):
     scheduled_at: Optional[datetime] = None
     posted_at: Optional[datetime] = None
     status: str
-    platform: str
+    platforms: Optional[List[str]] = None  # Array of platforms for multi-platform posting
     engagement_metrics: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime

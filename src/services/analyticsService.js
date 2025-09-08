@@ -13,11 +13,11 @@ class AnalyticsService {
     try {
       const response = await fetch(`${API_BASE_URL}/analytics/overview`);
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch analytics overview');
       }
-      
+
       return data.data;
     } catch (error) {
       console.error('Error fetching analytics overview:', error);
@@ -32,11 +32,11 @@ class AnalyticsService {
     try {
       const response = await fetch(`${API_BASE_URL}/analytics/followers`);
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch followers');
       }
-      
+
       return {
         followers: data.followers || 0,
         configured: data.configured || false,
@@ -55,11 +55,11 @@ class AnalyticsService {
     try {
       const response = await fetch(`${API_BASE_URL}/analytics/demographics`);
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch demographics');
       }
-      
+
       return {
         by_country: data.by_country || {},
         by_age_gender: data.by_age_gender || {},
@@ -79,11 +79,11 @@ class AnalyticsService {
     try {
       const response = await fetch(`${API_BASE_URL}/analytics/posts?limit=${limit}`);
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch posts analytics');
       }
-      
+
       return {
         posts: data.posts || [],
         configured: data.configured || false,
@@ -102,11 +102,11 @@ class AnalyticsService {
     try {
       const response = await fetch(`${API_BASE_URL}/analytics/posts/best?limit=${limit}`);
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch best post');
       }
-      
+
       return {
         post: data.post || {},
         configured: data.configured || false,
@@ -125,11 +125,11 @@ class AnalyticsService {
     try {
       const response = await fetch(`${API_BASE_URL}/analytics/posts/worst?limit=${limit}`);
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch worst post');
       }
-      
+
       return {
         post: data.post || {},
         configured: data.configured || false,
@@ -148,11 +148,11 @@ class AnalyticsService {
     try {
       const response = await fetch(`${API_BASE_URL}/analytics/metrics`);
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch available metrics');
       }
-      
+
       return {
         available_metrics: data.available_metrics || [],
         configured: data.configured || false
@@ -181,11 +181,11 @@ class AnalyticsService {
     try {
       const response = await fetch(`${API_BASE_URL}/analytics/status`);
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch analytics status');
       }
-      
+
       return {
         configured: data.configured || false,
         page_id_present: data.page_id_present || false,
@@ -226,7 +226,7 @@ class AnalyticsService {
   generateEngagementOverTime(posts) {
     // Group posts by date and calculate average engagement
     const engagementByDate = {};
-    
+
     posts.forEach(post => {
       if (post.created_time) {
         const date = new Date(post.created_time).toISOString().slice(0, 10);
@@ -244,12 +244,12 @@ class AnalyticsService {
     // Convert to array format for visualization
     const engagementOverTime = [];
     const today = new Date();
-    
+
     // Generate data for last 14 days
     for (let i = 13; i >= 0; i--) {
       const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
       const dateStr = date.toISOString().slice(0, 10);
-      
+
       let engagement = 0;
       if (engagementByDate[dateStr]) {
         engagement = Math.round(engagementByDate[dateStr].total_engagement / engagementByDate[dateStr].count);
@@ -257,13 +257,13 @@ class AnalyticsService {
         // Generate some variation for days without data
         engagement = Math.floor(100 + Math.random() * 300);
       }
-      
+
       engagementOverTime.push({
         date: dateStr,
         engagement
       });
     }
-    
+
     return engagementOverTime;
   }
 

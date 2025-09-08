@@ -218,7 +218,7 @@ class CalendarService:
                 'status': 'scheduled' if post.status == 'scheduled' else 'draft',
                 'metadata': {
                     'post_status': post.status,
-                    'platform': post.platform,
+                    'platforms': post.platforms,
                     'image_url': post.image_url
                 }
             }

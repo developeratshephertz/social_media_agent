@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import Card from "../components/ui/Card.jsx";
 import Button from "../components/ui/Button.jsx";
 import Badge from "../components/ui/Badge.jsx";
@@ -17,7 +17,12 @@ function Stat({ label, value, sub }) {
 }
 
 function Dashboard() {
-  const { campaigns } = useCampaignStore();
+  const { campaigns, loadCampaignsFromDB } = useCampaignStore();
+  
+  // Load campaigns from database on component mount
+  useEffect(() => {
+    loadCampaignsFromDB();
+  }, [loadCampaignsFromDB]);
   const stats = useMemo(() => {
     // Count unique batches (campaigns) instead of individual posts
     const uniqueBatches = new Set();
@@ -45,7 +50,18 @@ function Dashboard() {
   }, [campaigns]);
 
   const recent = campaigns
-    .flatMap((c) => (c.activity || []).map((a) => ({ ...a, id: c.id })))
+    .flatMap((c) => (c.activity || []).map((a) => ({ 
+      ...a, 
+      id: c.id, 
+      campaignName: c.productDescription || 'Untitled Campaign'
+    })))
+    .filter((a) => {
+      // Filter out technical messages, only show meaningful activity
+      const text = a.text.toLowerCase();
+      return !text.includes('ai image generated') && 
+             !text.includes('ai caption generated') && 
+             !text.includes('campaign created');
+    })
     .sort((a, b) => b.time - a.time)
     .slice(0, 6);
 
@@ -81,10 +97,17 @@ function Dashboard() {
         >
           <ul className="space-y-3">
             {recent.map((a, idx) => (
-              <li key={idx} className="flex items-center justify-between">
-                <div className="text-sm text-gray-800">{a.text}</div>
-                <div className="text-xs text-gray-500">
-                  {format(a.time, "PP p")}
+              <li key={idx} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-gray-900 truncate">
+                    {a.campaignName}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {format(a.time, "MMM d, h:mm a")}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {a.text}
                 </div>
               </li>
             ))}
