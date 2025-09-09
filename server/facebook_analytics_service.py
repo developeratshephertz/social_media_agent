@@ -13,8 +13,8 @@ class FacebookAnalyticsService:
     """Service for fetching Facebook Page and Post analytics using Graph API"""
     
     def __init__(self):
-        self.page_id = os.getenv("PAGE_ID")
-        self.access_token = os.getenv("ACCESS_TOKEN")
+        self.page_id = os.getenv("FACEBOOK_PAGE_ID")
+        self.access_token = os.getenv("FACEBOOK_ACCESS_TOKEN")
         self.base_url = "https://graph.facebook.com/v21.0"
         
         if not self.page_id or not self.access_token:
@@ -29,7 +29,7 @@ class FacebookAnalyticsService:
         url = f"{self.base_url}/{endpoint}"
         
         try:
-            response = requests.get(url, params=params, timeout=30)
+            response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.HTTPError:
@@ -278,34 +278,71 @@ class FacebookAnalyticsService:
         }
     
     def get_comprehensive_analytics(self) -> Dict[str, Any]:
-        """Get comprehensive analytics data for dashboard"""
+        """Get comprehensive analytics data for dashboard - OPTIMIZED VERSION"""
         try:
-            # Get basic metrics
+            # Get basic metrics with reduced data
             followers_data = self.get_page_followers()
             demographics = self.get_audience_demographics()
-            analyzed_posts = self.analyze_posts(20)
+            
+            # Get posts with basic data only (no individual insights calls)
+            posts = self.get_recent_posts(10)  # Reduced from 20 to 10
+            analyzed_posts = []
+            
+            # Process posts without individual insights calls for speed
+            for post in posts:
+                post_id = post.get("id")
+                if not post_id:
+                    continue
+                
+                # Extract basic engagement data from post fields only
+                likes_data = post.get("likes", {})
+                comments_data = post.get("comments", {})
+                shares_data = post.get("shares", {})
+                
+                reactions_count = 0
+                if likes_data and isinstance(likes_data, dict) and "summary" in likes_data:
+                    reactions_count = likes_data["summary"].get("total_count", 0)
+                
+                comments_count = 0
+                if comments_data and isinstance(comments_data, dict) and "summary" in comments_data:
+                    comments_count = comments_data["summary"].get("total_count", 0)
+                
+                shares_count = 0
+                if shares_data:
+                    if isinstance(shares_data, dict) and "count" in shares_data:
+                        shares_count = shares_data["count"]
+                    elif isinstance(shares_data, (int, float)):
+                        shares_count = int(shares_data)
+                
+                analyzed_posts.append({
+                    "id": post_id,
+                    "message": post.get("message", ""),
+                    "created_time": post.get("created_time", ""),
+                    "reactions_count": reactions_count,
+                    "comments_count": comments_count,
+                    "shares_count": shares_count,
+                    "total_engagement": reactions_count + comments_count + shares_count
+                })
             
             # Calculate totals
-            total_impressions = sum(post.get("impressions", 0) for post in analyzed_posts)
-            total_reach = sum(post.get("reach", 0) for post in analyzed_posts)
-            total_engaged = sum(post.get("engaged_users", 0) for post in analyzed_posts)
+            total_engagement = sum(post.get("total_engagement", 0) for post in analyzed_posts)
             
-            # Get best post
-            best_post = self.get_best_performing_post(20)
+            # Get best post from basic data
+            best_post = max(analyzed_posts, key=lambda x: x.get("total_engagement", 0)) if analyzed_posts else {}
             best_post_id = best_post.get("id", "N/A") if best_post else "N/A"
             
             return {
                 "success": True,
                 "totals": {
                     "followers": followers_data.get("followers", 0),
-                    "impressions": total_impressions,
-                    "reach": total_reach,
+                    "total_engagement": total_engagement,
                     "best_post": best_post_id
                 },
                 "demographics": demographics,
                 "posts": analyzed_posts,
                 "best_post": best_post,
-                "metrics_available": len(analyzed_posts) > 0
+                "metrics_available": len(analyzed_posts) > 0,
+                "note": "Optimized version - basic engagement data only"
             }
             
         except Exception as e:
@@ -315,8 +352,7 @@ class FacebookAnalyticsService:
                 "error": str(e),
                 "totals": {
                     "followers": 0,
-                    "impressions": 0,
-                    "reach": 0,
+                    "total_engagement": 0,
                     "best_post": "N/A"
                 },
                 "demographics": {"by_country": {}, "by_age_gender": {}},

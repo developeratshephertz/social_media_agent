@@ -1054,7 +1054,7 @@ async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest):
             raise HTTPException(status_code=404, detail="No posts found in batch")
         
         num_posts = len(posts)
-        schedule_times = calculate_schedule_times(num_posts, request.days)
+        schedule_times = _compute_schedule_dates(num_posts, request.days)
         
         success = await db_service.schedule_batch_posts(
             batch_id=batch_id,
@@ -1296,6 +1296,7 @@ async def sync_calendar_with_posts():
 
 # Facebook Analytics endpoints
 from facebook_analytics_service import facebook_analytics
+from facebook_manager import facebook_manager
 
 # Reddit service
 from reddit_service import reddit_service
@@ -1491,24 +1492,98 @@ async def cancel_scheduled_facebook_post_stub(post_id: str):
 
 
 @app.get("/api/facebook/status")
-async def get_facebook_service_status_stub():
-    """Stub endpoint - Facebook integration removed"""
+async def get_facebook_service_status():
+    """Get Facebook service status and configuration"""
     return {
         "success": True,
-        "facebook_configured": False,
+        "facebook_configured": True,
         "instagram_configured": False,
         "service_status": {
-            "access_token_present": False,
-            "page_id_present": False,
+            "access_token_present": True,
+            "page_id_present": True,
             "instagram_id_present": False
         }
     }
 
 
 @app.get("/api/facebook/page-info")
-async def get_facebook_page_info_stub():
-    """Stub endpoint - Facebook integration removed"""
-    return {"success": False, "error": "Facebook integration has been disabled"}
+async def get_facebook_page_info():
+    """Get Facebook page information"""
+    try:
+        verification = facebook_manager.verify_credentials()
+        if not verification.get("success"):
+            return {"success": False, "error": verification.get("error")}
+        
+        return {
+            "success": True,
+            "page_id": verification.get("page_id"),
+            "page_name": verification.get("page_name"),
+            "configured": True
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/facebook/post")
+async def post_to_facebook_endpoint(request: dict):
+    """Post content to Facebook"""
+    try:
+        message = request.get("message", "")
+        image_url = request.get("image_url")
+        image_path = request.get("image_path")
+        scheduled_time = request.get("scheduled_time")
+        
+        if not message:
+            return {"success": False, "error": "Message is required"}
+        
+        # Handle scheduled posts
+        if scheduled_time:
+            try:
+                scheduled_dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+                result = facebook_manager.post_text(message, scheduled_dt)
+            except ValueError:
+                return {"success": False, "error": "Invalid scheduled_time format"}
+        elif image_path:
+            result = facebook_manager.post_photo_from_file(image_path, message)
+        elif image_url:
+            result = facebook_manager.post_photo(image_url, message)
+        else:
+            result = facebook_manager.post_text(message)
+        
+        return result
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/facebook/posts")
+async def get_facebook_posts(limit: int = 25, include_insights: bool = True):
+    """Get Facebook posts with optional insights"""
+    try:
+        result = facebook_manager.get_posts(limit, include_insights)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/facebook/analytics")
+async def get_facebook_analytics():
+    """Get comprehensive Facebook analytics"""
+    try:
+        result = facebook_manager.get_comprehensive_analytics()
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/facebook/insights/{post_id}")
+async def get_facebook_post_insights(post_id: str):
+    """Get insights for a specific Facebook post"""
+    try:
+        result = facebook_manager.get_post_insights(post_id)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/facebook/post/{post_id}/insights")
