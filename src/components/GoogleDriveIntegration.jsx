@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import Button from "./ui/Button.jsx";
 import { toast } from "sonner";
+import { apiFetch, apiUrl } from "../lib/api.js";
+import apiClient from "../lib/apiClient.js";
 
 const GoogleDriveIntegration = ({ campaigns = [], onSaveComplete, updateCampaign }) => {
   const [isConnected, setIsConnected] = useState(false);
@@ -14,9 +16,8 @@ const GoogleDriveIntegration = ({ campaigns = [], onSaveComplete, updateCampaign
 
   const checkGoogleStatus = async () => {
     try {
-      const response = await fetch("http://localhost:8000/google/status");
-      const data = await response.json();
-      setIsConnected(data.connected);
+      const data = await apiClient.getGoogleStatus();
+      setIsConnected(data && (data.connected || data.success));
     } catch (error) {
       console.error("Failed to check Google status:", error);
       setIsConnected(false);
@@ -27,15 +28,14 @@ const GoogleDriveIntegration = ({ campaigns = [], onSaveComplete, updateCampaign
     try {
       setLoading(true);
       // Open Google OAuth in a new window
-      const response = await fetch("http://localhost:8000/google/connect");
+      const response = await apiFetch("/google/connect");
       if (response.ok) {
-        window.open("http://localhost:8000/google/connect", "_blank", "width=500,height=600");
+        window.open(apiUrl("/google/connect"), "_blank", "width=500,height=600");
         // Poll for connection status
         const pollInterval = setInterval(async () => {
           await checkGoogleStatus();
-          const statusResponse = await fetch("http://localhost:8000/google/status");
-          const statusData = await statusResponse.json();
-          if (statusData.connected) {
+          const statusData = await apiClient.getGoogleStatus();
+          if (statusData && (statusData.connected || statusData.success)) {
             setIsConnected(true);
             clearInterval(pollInterval);
             toast.success("Successfully connected to Google Drive!");
@@ -74,28 +74,18 @@ const GoogleDriveIntegration = ({ campaigns = [], onSaveComplete, updateCampaign
         ]
       };
 
-      const response = await fetch("http://localhost:8000/google-drive/save-campaign", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(campaignData),
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
+      const data = await apiClient.saveCampaignToDrive(campaignData);
+      if (data && data.success) {
         toast.success(`Campaign saved to Google Drive! File ID: ${data.fileId}`);
         if (onSaveComplete) {
-          // Pass both the response data and updated imageUrl if available
           const saveData = {
             ...data,
-            updatedImageUrl: data.updatedImageUrl || campaign.imageUrl
+            updatedImageUrl: data.updatedImageUrl || campaign.imageUrl,
           };
           onSaveComplete(campaign.id, saveData);
         }
       } else {
-        throw new Error(data.error || "Failed to save to Google Drive");
+        throw new Error(data && (data.error || data.message) || "Failed to save to Google Drive");
       }
     } catch (error) {
       console.error("Failed to save campaign:", error);
@@ -150,7 +140,7 @@ const GoogleDriveIntegration = ({ campaigns = [], onSaveComplete, updateCampaign
         </div>
         
         <div className="flex items-center space-x-2">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+          <div className={`${isConnected ? 'bg-green-500' : 'bg-red-500'} w-2 h-2 rounded-full`} />
           <span className="text-sm text-gray-600">
             {isConnected ? "Connected" : "Disconnected"}
           </span>

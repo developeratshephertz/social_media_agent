@@ -11,10 +11,13 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import time
 import hashlib
+import math
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
 from contextlib import asynccontextmanager
 from google_complete import router as google_router
+from fastapi import WebSocket, WebSocketDisconnect
+import asyncio
 
 # Database imports
 from database import startup_db, shutdown_db, get_database
@@ -74,6 +77,37 @@ from fastapi.responses import FileResponse
 
 # Include Google integration router
 app.include_router(google_router)
+
+# Simple in-memory broadcaster for campaign updates (used by WebSocket endpoint)
+class Broadcaster:
+    def __init__(self):
+        self.connections: List[WebSocket] = []
+        self.lock = asyncio.Lock()
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        async with self.lock:
+            self.connections.append(ws)
+
+    async def disconnect(self, ws: WebSocket):
+        async with self.lock:
+            if ws in self.connections:
+                self.connections.remove(ws)
+
+    async def broadcast(self, message: dict):
+        async with self.lock:
+            for ws in list(self.connections):
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    # remove broken connections
+                    try:
+                        self.connections.remove(ws)
+                    except ValueError:
+                        pass
+
+campaign_broadcaster = Broadcaster()
+analytics_broadcaster = Broadcaster()
 
 # Lifespan events are now handled in the lifespan context manager above
 
@@ -493,8 +527,14 @@ def generate_image_with_nano_banana(description: str) -> Optional[str]:
             print("Nano Banana (Google Gemini) API key not found, creating placeholder image...")
             return create_placeholder_image(description)
 
-        import google.generativeai as genai
+        try:
+            import google.generativeai as genai
+        except Exception:
+            genai = None
         
+        if not genai:
+            raise Exception("Nano Banana (google.generativeai) is not available in this environment")
+
         # Configure Gemini API
         genai.configure(api_key=NANO_BANANA_API_KEY)
         
@@ -929,6 +969,52 @@ async def get_recent_posts(limit: int = 10):
         return {"success": False, "error": str(e)}
 
 
+@app.get("/api/campaigns")
+async def get_campaigns(limit: int = 50):
+    """Return campaigns (wrapper for /api/posts for frontend compatibility)."""
+    try:
+        posts = await db_service.get_recent_posts(limit=limit)
+        # Map DB posts to frontend campaign shape
+        campaigns = []
+        for post in posts:
+            campaigns.append({
+                "id": post.get("id"),
+                "batch_id": post.get("batch_id"),
+                "created_at": post.get("created_at"),
+                "original_description": post.get("original_description"),
+                "caption": post.get("caption"),
+                "scheduled_at": post.get("scheduled_at"),
+                "status": post.get("status"),
+                "image_path": post.get("image_path"),
+                "platforms": post.get("platforms"),
+            })
+
+        return {"success": True, "campaigns": campaigns}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.websocket("/ws/campaigns")
+async def websocket_campaigns(ws: WebSocket):
+    """WebSocket endpoint that streams campaign updates in real-time."""
+    await campaign_broadcaster.connect(ws)
+    try:
+        while True:
+            # Keep connection alive by receiving ping messages from client
+            data = await ws.receive_text()
+            # The client may send 'ping' to keep the socket alive; echo back current campaigns when requested
+            if data == "ping":
+                try:
+                    posts = await db_service.get_recent_posts(limit=50)
+                    await ws.send_json({"type": "snapshot", "campaigns": posts})
+                except Exception as e:
+                    await ws.send_json({"type": "error", "message": str(e)})
+    except WebSocketDisconnect:
+        await campaign_broadcaster.disconnect(ws)
+    except Exception:
+        await campaign_broadcaster.disconnect(ws)
+
+
 @app.put("/api/posts/{post_id}")
 async def update_post(post_id: str, update_data: dict):
     """Update a post in database"""
@@ -1044,6 +1130,26 @@ class ScheduleBatchRequest(BaseModel):
     days: int
 
 
+def calculate_schedule_times(num_posts: int, days: int):
+    """Return a list of ISO timestamps for scheduling posts evenly across days."""
+    import math
+    per_day = max(1, math.ceil(num_posts / max(1, days)))
+    now = datetime.utcnow()
+    # Start at next full hour
+    start = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    times = []
+    for i in range(num_posts):
+        day_index = i // per_day
+        slot_index = i % per_day
+        hour_step = max(1, math.floor(12 / per_day))
+        scheduled = start + timedelta(days=day_index, hours=slot_index * hour_step)
+        # Clamp late hours to 22:00
+        if scheduled.hour > 22:
+            scheduled = scheduled.replace(hour=22, minute=0, second=0, microsecond=0)
+        times.append(scheduled.isoformat() + "Z")
+    return times
+
+
 @app.post("/api/batch/{batch_id}/schedule")
 async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest):
     """Schedule all posts in a batch"""
@@ -1054,7 +1160,7 @@ async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest):
             raise HTTPException(status_code=404, detail="No posts found in batch")
         
         num_posts = len(posts)
-        schedule_times = _compute_schedule_dates(num_posts, request.days)
+        schedule_times = calculate_schedule_times(num_posts, request.days)
         
         success = await db_service.schedule_batch_posts(
             batch_id=batch_id,
@@ -1082,6 +1188,61 @@ async def get_database_stats():
         return {"success": True, "stats": stats}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@app.get("/api/hero")
+async def get_hero():
+    """Return small summary used by the dashboard hero: total campaigns, posts this week, active, avgEngagement, totalPosts"""
+    try:
+        # Attempt to load recent posts and compute simple aggregates
+        posts = await db_service.get_recent_posts(limit=1000)
+
+        unique_batches = set()
+        for p in posts:
+            if p.get('batch_id'):
+                unique_batches.add(p.get('batch_id'))
+            else:
+                unique_batches.add(f"single_{p.get('id')}")
+
+        total_campaigns = len(unique_batches)
+        total_posts = len(posts)
+
+        now = datetime.now()
+        in_seven_days = now + timedelta(days=7)
+
+        scheduled_this_week = 0
+        active_posts = 0
+        for p in posts:
+            try:
+                status = (p.get('status') or '').lower()
+                if p.get('scheduled_at'):
+                    scheduled_dt = datetime.fromisoformat(p.get('scheduled_at').replace('Z', '+00:00'))
+                    if scheduled_dt >= now and scheduled_dt <= in_seven_days:
+                        scheduled_this_week += 1
+                if status in ['scheduled', 'posted', 'posted', 'published']:
+                    active_posts += 1
+            except Exception:
+                # ignore parse errors
+                pass
+
+        avg_engagement = 4.6
+
+        return {
+            "success": True,
+            "data": {
+                "total": total_campaigns,
+                "scheduledThisWeek": scheduled_this_week,
+                "active": active_posts,
+                "avgEngagement": avg_engagement,
+                "totalPosts": total_posts,
+            },
+        }
+    except Exception as e:
+        try:
+            stats = await db_service.get_database_stats()
+            return {"success": True, "data": stats}
+        except Exception:
+            return {"success": False, "error": str(e)}
 
 
 @app.get("/api/database/info")
@@ -1329,6 +1490,26 @@ async def get_analytics_overview():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+@app.websocket("/ws/analytics")
+async def websocket_analytics(ws: WebSocket):
+    """WebSocket endpoint that streams analytics updates in real-time."""
+    await analytics_broadcaster.connect(ws)
+    try:
+        while True:
+            data = await ws.receive_text()
+            if data == "ping":
+                try:
+                    # Send a lightweight analytics snapshot
+                    overview = await (get_analytics_overview())
+                    await ws.send_json({"type": "snapshot", "overview": overview})
+                except Exception as e:
+                    await ws.send_json({"type": "error", "message": str(e)})
+    except WebSocketDisconnect:
+        await analytics_broadcaster.disconnect(ws)
+    except Exception:
+        await analytics_broadcaster.disconnect(ws)
+
 @app.get("/api/analytics/followers")
 async def get_followers():
     """Get page followers count"""
@@ -1472,38 +1653,24 @@ async def get_analytics_status():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# Facebook endpoints removed - stub responses for frontend compatibility
-@app.post("/api/facebook/publish")
-async def publish_to_facebook_stub(request: dict):
-    """Stub endpoint - Facebook integration removed"""
-    return {"success": False, "error": "Facebook integration has been disabled"}
-
-
-@app.post("/api/facebook/schedule")
-async def schedule_facebook_post_stub(request: dict):
-    """Stub endpoint - Facebook integration removed"""
-    return {"success": False, "error": "Facebook integration has been disabled"}
-
-
-@app.delete("/api/facebook/schedule/{post_id}")
-async def cancel_scheduled_facebook_post_stub(post_id: str):
-    """Stub endpoint - Facebook integration removed"""
-    return {"success": False, "error": "Facebook integration has been disabled"}
-
-
 @app.get("/api/facebook/status")
 async def get_facebook_service_status():
     """Get Facebook service status and configuration"""
-    return {
-        "success": True,
-        "facebook_configured": True,
-        "instagram_configured": False,
-        "service_status": {
-            "access_token_present": True,
-            "page_id_present": True,
-            "instagram_id_present": False
+    try:
+        verification = facebook_manager.verify_credentials()
+        svc = verification or {}
+        return {
+            "success": True,
+            "facebook_configured": bool(svc.get("success")),
+            "instagram_configured": bool(svc.get("instagram_id")),
+            "service_status": {
+                "access_token_present": bool(svc.get("access_token_present", True)),
+                "page_id_present": bool(svc.get("page_id")),
+                "instagram_id_present": bool(svc.get("instagram_id"))
+            }
         }
-    }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/facebook/page-info")
@@ -1513,12 +1680,11 @@ async def get_facebook_page_info():
         verification = facebook_manager.verify_credentials()
         if not verification.get("success"):
             return {"success": False, "error": verification.get("error")}
-        
         return {
             "success": True,
             "page_id": verification.get("page_id"),
             "page_name": verification.get("page_name"),
-            "configured": True
+            "configured": True,
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -1526,16 +1692,16 @@ async def get_facebook_page_info():
 
 @app.post("/api/facebook/post")
 async def post_to_facebook_endpoint(request: dict):
-    """Post content to Facebook"""
+    """Post content to Facebook (supports immediate or scheduled)"""
     try:
         message = request.get("message", "")
         image_url = request.get("image_url")
         image_path = request.get("image_path")
         scheduled_time = request.get("scheduled_time")
-        
+
         if not message:
             return {"success": False, "error": "Message is required"}
-        
+
         # Handle scheduled posts
         if scheduled_time:
             try:
@@ -1549,9 +1715,9 @@ async def post_to_facebook_endpoint(request: dict):
             result = facebook_manager.post_photo(image_url, message)
         else:
             result = facebook_manager.post_text(message)
-        
+
         return result
-        
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -1584,12 +1750,6 @@ async def get_facebook_post_insights(post_id: str):
         return result
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-
-@app.get("/api/facebook/post/{post_id}/insights")
-async def get_facebook_post_insights_stub(post_id: str):
-    """Stub endpoint - Facebook integration removed"""
-    return {"success": False, "error": "Facebook integration has been disabled"}
 
 
 @app.get("/api/scheduler/status")

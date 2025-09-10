@@ -7,6 +7,8 @@ import Button from "./ui/Button.jsx";
 import Input from "./ui/Input.jsx";
 import Textarea from "./ui/Textarea.jsx";
 import { toast } from "sonner";
+import apiClient from "../lib/apiClient.js";
+import { apiFetch, apiUrl } from "../lib/api.js";
 
 const localizer = momentLocalizer(moment);
 
@@ -17,7 +19,8 @@ const Calendar = ({
   onEventDelete,
   onEventSelect,
   editable = true,
-  height = 600 
+  height = 600,
+  autoLoad = true,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create"); // create, edit, view
@@ -33,6 +36,27 @@ const Calendar = ({
     location: "",
     reminder: 15
   });
+
+  // Internal events loaded from backend
+  const [backendEvents, setBackendEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
+  const loadEvents = async () => {
+    if (!autoLoad) return;
+    try {
+      setLoadingEvents(true);
+      const data = await apiClient.getCalendarEvents();
+      if (data && data.success && Array.isArray(data.events)) {
+        setBackendEvents(data.events);
+      }
+    } catch (e) {
+      console.warn('Failed to load calendar events:', e);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  useEffect(() => { loadEvents(); }, []);
 
   // Custom event style getter
   const eventStyleGetter = (event) => {
@@ -51,15 +75,27 @@ const Calendar = ({
     };
   };
 
-  // Transform events for BigCalendar
+  // Transform events for BigCalendar and enrich with media/platform metadata
   const calendarEvents = useMemo(() => {
-    return events.map(event => ({
+    // Merge backend events with provided events (provided takes precedence by id)
+    const byId = new Map();
+    [...backendEvents, ...events].forEach((ev) => {
+      const id = ev.id || `${ev.title}-${ev.start_time || ev.start}`;
+      byId.set(id, { id, ...ev });
+    });
+    return Array.from(byId.values()).map(event => ({
       ...event,
       start: new Date(event.start_time || event.start),
       end: new Date(event.end_time || event.end),
-      title: event.title || "Untitled Event"
+      title: event.title || "Untitled Event",
+      // Common aliases
+      imageUrl: event.imageUrl || event.image_url || event.driveImageUrl || event.image,
+      caption: event.generatedContent || event.caption || event.description,
+      platforms: Array.isArray(event.platforms)
+        ? event.platforms
+        : (event.platform ? [event.platform] : []),
     }));
-  }, [events]);
+  }, [events, backendEvents]);
 
   // Handle slot selection (creating new events)
   const handleSelectSlot = ({ start, end }) => {
@@ -92,7 +128,7 @@ const Calendar = ({
     setSelectedEvent(event);
     setFormData({
       title: event.title || "",
-      description: event.description || "",
+      description: event.caption || event.description || "",
       start: new Date(event.start_time || event.start),
       end: new Date(event.end_time || event.end),
       color: event.color || "#3174ad",
@@ -140,17 +176,31 @@ const Calendar = ({
       if (modalMode === "create") {
         if (onEventCreate) {
           await onEventCreate(eventData);
+        } else {
+          await apiClient.createCalendarEvent(eventData);
         }
         toast.success("Event created successfully");
       } else if (modalMode === "edit") {
         if (onEventUpdate) {
           await onEventUpdate(selectedEvent.id, eventData);
+        } else if (selectedEvent?.id) {
+          await apiClient.updateCalendarEvent(selectedEvent.id, eventData);
+        }
+        // If this event is linked to a post, also sync the scheduled time
+        if (selectedEvent?.post_id) {
+          try {
+            await apiClient.updatePost(String(selectedEvent.post_id), { scheduled_at: eventData.start_time, status: 'scheduled' });
+          } catch (e) {
+            console.warn('Failed to sync campaign with event update:', e);
+          }
         }
         toast.success("Event updated successfully");
       }
       
       setIsModalOpen(false);
       resetForm();
+      // Refresh backend events to reflect changes
+      loadEvents();
     } catch (error) {
       toast.error(`Failed to save event: ${error.message}`);
     }
@@ -165,10 +215,17 @@ const Calendar = ({
     try {
       if (onEventDelete) {
         await onEventDelete(selectedEvent.id);
+      } else {
+        await apiClient.deleteCalendarEvent(selectedEvent.id);
+      }
+      // If linked to a post, clear its schedule
+      if (selectedEvent?.post_id) {
+        try { await apiClient.updatePost(String(selectedEvent.post_id), { scheduled_at: null, status: 'draft' }); } catch {}
       }
       toast.success("Event deleted successfully");
       setIsModalOpen(false);
       resetForm();
+      loadEvents();
     } catch (error) {
       toast.error(`Failed to delete event: ${error.message}`);
     }
@@ -198,6 +255,40 @@ const Calendar = ({
 
   // State management for calendar view - default to week
   const [currentView, setCurrentView] = useState("week");
+
+  // Enrich events with post details when available (caption, image, platforms)
+  useEffect(() => {
+    const enrich = async () => {
+      try {
+        const needs = backendEvents.filter(ev => ev && ev.post_id && (!ev.caption || !ev.platforms || ev.platforms.length === 0 || !ev.imageUrl));
+        if (needs.length === 0) return;
+        const results = await Promise.allSettled(needs.map(async (ev) => {
+          try {
+            const resp = await apiFetch(`/api/posts/${ev.post_id}`);
+            const data = await resp.json();
+            if (data && data.success && data.post) {
+              const p = data.post;
+              const platforms = Array.isArray(p.platforms) ? p.platforms : (p.platform ? [p.platform] : []);
+              const imageUrl = p.image_path ? apiUrl(p.image_path) : (p.image_url || ev.imageUrl);
+              return { ...ev, caption: p.caption || p.original_description || ev.caption, platforms: platforms.length ? platforms : ev.platforms, imageUrl };
+            }
+          } catch {}
+          return ev;
+        }));
+        // Merge back into backendEvents
+        const byId = new Map(backendEvents.map(e => [e.id || `${e.title}-${e.start_time || e.start}`, e]));
+        results.forEach(r => {
+          if (r.status === 'fulfilled') {
+            const e = r.value;
+            const id = e.id || `${e.title}-${e.start_time || e.start}`;
+            byId.set(id, e);
+          }
+        });
+        setBackendEvents(Array.from(byId.values()));
+      } catch {}
+    };
+    enrich();
+  }, [backendEvents]);
   
   const CustomToolbar = ({ label, onNavigate, onView }) => {
     const handleViewChange = (newView) => {
@@ -260,6 +351,18 @@ const Calendar = ({
     );
   };
 
+  // Custom compact event renderer (thumbnail + title)
+  const EventContent = ({ event }) => {
+    return (
+      <div className="flex items-center gap-1 overflow-hidden">
+        {event.imageUrl ? (
+          <img src={event.imageUrl} alt="thumb" className="w-4 h-4 rounded object-cover" />
+        ) : null}
+        <span className="truncate">{event.title}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="w-full">
       <style jsx>{`
@@ -300,14 +403,15 @@ const Calendar = ({
         selectable={editable}
         eventPropGetter={eventStyleGetter}
         components={{
-          toolbar: CustomToolbar
+          toolbar: CustomToolbar,
+          event: EventContent
         }}
         step={30}
         timeslots={2}
         view={currentView}
         onView={(view) => setCurrentView(view)}
         views={["month", "week", "day", "agenda"]}
-        popup={false}
+        popup
         showMultiDayTimes
       />
 
@@ -324,6 +428,39 @@ const Calendar = ({
         }
       >
         <div className="space-y-4 max-w-lg mx-auto">
+          {/* Preview section: image, caption, platforms */}
+          {selectedEvent && (
+            <div className="rounded-lg border p-3 bg-gray-50">
+              <div className="flex items-start gap-3">
+                {selectedEvent.imageUrl ? (
+                  <img
+                    src={selectedEvent.imageUrl}
+                    alt="preview"
+                    className="w-16 h-16 rounded object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded bg-white border flex items-center justify-center text-gray-400">
+                    🖼️
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-gray-900 truncate">{selectedEvent.title || "Untitled Event"}</div>
+                  {selectedEvent.caption && (
+                    <div className="text-xs text-black line-clamp-2">{selectedEvent.caption}</div>
+                  )}
+                  {selectedEvent.platforms && selectedEvent.platforms.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {selectedEvent.platforms.map((pf, i) => (
+                        <span key={`${pf}-${i}`} className="px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-800">
+                          {pf === 'twitter' ? 'X (Twitter)' : (pf || '').charAt(0).toUpperCase() + (pf || '').slice(1)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {/* Title */}
           <Input
             label="Event Title"

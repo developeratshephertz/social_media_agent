@@ -5,6 +5,8 @@ import Input from "./ui/Input.jsx";
 import Textarea from "./ui/Textarea.jsx";
 import { toast } from "sonner";
 import moment from "moment";
+import { apiFetch, apiUrl } from "../lib/api.js";
+import apiClient from "../lib/apiClient.js";
 
 const PostEventModal = ({ 
   isOpen, 
@@ -46,17 +48,36 @@ const PostEventModal = ({
 
   const fetchPostData = async (postId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/posts/${postId}`);
-      const data = await response.json();
-      if (data.success && data.post) {
-        setPostData(data.post);
-        // Update form with post data
-        setFormData(prev => ({
-          ...prev,
-          title: `📱 ${data.post.original_description?.substring(0, 50)}...`,
-          description: data.post.caption || data.post.original_description,
-          image_url: data.post.image_path || data.post.image_url || ""
-        }));
+      const data = await apiClient.getPosts({ limit: 1 });
+      // Attempt to fetch single post via dedicated endpoint
+      try {
+        const postResp = await apiFetch(`/api/posts/${postId}`);
+        const postDataResp = await postResp.json();
+        if (postDataResp.success && postDataResp.post) {
+          setPostData(postDataResp.post);
+          setFormData(prev => ({
+            ...prev,
+            title: `📱 ${postDataResp.post.original_description?.substring(0, 50)}...`,
+            description: postDataResp.post.caption || postDataResp.post.original_description,
+            image_url: postDataResp.post.image_path || postDataResp.post.image_url || ""
+          }));
+          return;
+        }
+      } catch (e) {
+        // ignore and fallback
+      }
+      // Fallback: try scanning posts result for the postId
+      if (data && data.success && data.posts) {
+        const p = data.posts.find(x => x.id === postId);
+        if (p) {
+          setPostData(p);
+          setFormData(prev => ({
+            ...prev,
+            title: `📱 ${p.original_description?.substring(0, 50)}...`,
+            description: p.caption || p.original_description,
+            image_url: p.image_path || p.image_url || ""
+          }));
+        }
       }
     } catch (error) {
       console.error("Failed to fetch post data:", error);
@@ -106,7 +127,7 @@ const PostEventModal = ({
       // If this event is linked to a post, also update the post in database
       if (event.post_id) {
         try {
-          const postUpdateResponse = await fetch(`http://localhost:8000/api/posts/${event.post_id}`, {
+          const postUpdateResponse = await apiFetch(`/api/posts/${event.post_id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -190,7 +211,7 @@ const PostEventModal = ({
             </label>
             <div className="border rounded-lg overflow-hidden bg-gray-50">
               <img
-                src={formData.image_url.startsWith('/') ? `http://localhost:8000${formData.image_url}` : formData.image_url}
+                src={formData.image_url.startsWith('/') ? apiUrl(formData.image_url) : formData.image_url}
                 alt="Post preview"
                 className="w-full h-32 object-cover"
                 onError={(e) => {

@@ -1,29 +1,36 @@
-import * as Dialog from "@radix-ui/react-dialog";
+import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
-function Modal({ open, onOpenChange, title, description, children, footer, className }) {
-  return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/30 z-40" />
-        <Dialog.Content className={`fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg w-[90vw] p-4 z-50 ${className || 'max-w-md'}`}>
-          {title && (
-            <Dialog.Title className="text-base font-semibold text-gray-900">
-              {title}
-            </Dialog.Title>
-          )}
-          {description && (
-            <Dialog.Description className="text-sm text-gray-600 mt-1">
-              {description}
-            </Dialog.Description>
-          )}
-          <div className="mt-4">{children}</div>
-          {footer && (
-            <div className="mt-6 flex justify-end gap-2">{footer}</div>
-          )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+export default function Modal({ open, onOpenChange, title, children, ariaLabel }) {
+  const root = typeof document !== 'undefined' ? document.getElementById('modal-root') : null;
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') onOpenChange && onOpenChange(false);
+    }
+    if (open) document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onOpenChange]);
+
+  useEffect(() => {
+    if (open && ref.current) {
+      const prev = document.activeElement;
+      ref.current.focus();
+      return () => prev && (prev).focus();
+    }
+  }, [open]);
+
+  if (!open) return null;
+  const modal = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={() => onOpenChange && onOpenChange(false)} />
+      <div role="dialog" aria-modal="true" aria-label={ariaLabel || title} tabIndex={-1} ref={ref} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-lg p-6 z-10 max-w-2xl mx-4 focus:outline-none">
+        {title && <div className="text-lg font-semibold mb-2">{title}</div>}
+        <div>{children}</div>
+      </div>
+    </div>
   );
-}
 
-export default Modal;
+  return root ? createPortal(modal, root) : modal;
+}

@@ -2,10 +2,10 @@ import Card from "../components/ui/Card.jsx";
 import Button from "../components/ui/Button.jsx";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { apiFetch, apiUrl } from "../lib/api.js";
 
 function Settings() {
-
-  // Google services
+  const [igConnected, setIgConnected] = useState(false);
   const [driveConnected, setDriveConnected] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [notifications, setNotifications] = useState(true);
@@ -13,46 +13,15 @@ function Settings() {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
 
-  // Check connection status on page load
+  // Check Google Drive connection status on page load
   useEffect(() => {
     checkGoogleStatus();
-    checkSocialMediaStatus();
   }, []);
-
-  const checkSocialMediaStatus = async () => {
-    // Check actual connection status for each platform
-    try {
-      // This would typically call your backend API to check each platform's connection status
-      // For now, we'll check if any credentials/tokens exist for each platform
-      // In a real implementation, you'd have endpoints like:
-      // - /api/social/instagram/status
-      // - /api/social/facebook/status
-      // - /api/social/twitter/status
-      // - /api/social/reddit/status
-
-      console.log("Checking social media connection status...");
-
-      // Since we don't have actual OAuth implementations yet, 
-      // we'll keep them as disconnected for now
-      // When you implement OAuth for each platform, this is where you'd check the real status
-
-    } catch (error) {
-      console.error("Failed to check social media status:", error);
-      // On error, assume all platforms are disconnected
-      setSocialConnections({
-        instagram: { connected: false, loading: false },
-        facebook: { connected: false, loading: false },
-        twitter: { connected: false, loading: false },
-        reddit: { connected: false, loading: false }
-      });
-    }
-  };
-
 
   const checkGoogleStatus = async () => {
     try {
       setCheckingStatus(true);
-      const response = await fetch("http://localhost:8000/google/status");
+      const response = await apiFetch("/google/status");
       const data = await response.json();
       setDriveConnected(data.connected);
       setCalendarConnected(data.connected); // Same OAuth token works for both
@@ -70,11 +39,11 @@ function Settings() {
       setLoading(true);
       // Open Google OAuth in a new window
       const authWindow = window.open(
-        "http://localhost:8000/google/connect",
-        "GoogleAuth",
+        apiUrl("/google/connect"), 
+        "GoogleAuth", 
         "width=500,height=600,scrollbars=yes,resizable=yes"
       );
-
+      
       // Poll for connection status
       const pollInterval = setInterval(async () => {
         if (authWindow.closed) {
@@ -86,9 +55,9 @@ function Settings() {
           setLoading(false);
           return;
         }
-
+        
         try {
-          const statusResponse = await fetch("http://localhost:8000/google/status");
+          const statusResponse = await apiFetch("/google/status");
           const statusData = await statusResponse.json();
           if (statusData.connected) {
             setDriveConnected(true);
@@ -101,7 +70,7 @@ function Settings() {
           // Continue polling
         }
       }, 2000);
-
+      
       // Stop polling after 60 seconds
       setTimeout(() => {
         clearInterval(pollInterval);
@@ -122,8 +91,8 @@ function Settings() {
     try {
       setLoading(true);
       // You would typically call an endpoint to revoke the token here
-      // await fetch("http://localhost:8000/google/disconnect", { method: "POST" });
-
+      // await apiFetch("/google/disconnect", { method: "POST" });
+      
       setDriveConnected(false);
       toast.success("Disconnected from Google Drive");
     } catch (error) {
@@ -138,6 +107,23 @@ function Settings() {
       <h1 className="text-2xl font-semibold">Settings</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card title="Instagram Account">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">Connection status</div>
+              <div className="text-sm text-gray-600">
+                {igConnected ? "Connected" : "Disconnected"}
+              </div>
+            </div>
+            {igConnected ? (
+              <Button variant="secondary" onClick={() => setIgConnected(false)}>
+                Disconnect
+              </Button>
+            ) : (
+              <Button onClick={() => setIgConnected(true)}>Connect</Button>
+            )}
+          </div>
+        </Card>
 
         <Card title="Google Drive">
           <div className="space-y-3">
@@ -149,8 +135,7 @@ function Settings() {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${checkingStatus ? 'bg-yellow-500' : driveConnected ? 'bg-green-500' : 'bg-red-500'
-                  }`} />
+                <div className={`${checkingStatus ? 'bg-yellow-500' : driveConnected ? 'bg-green-500' : 'bg-red-500'} w-2 h-2 rounded-full`} />
                 <span className="text-sm text-gray-600">
                   {checkingStatus ? "Checking" : driveConnected ? "Connected" : "Disconnected"}
                 </span>
@@ -166,15 +151,15 @@ function Settings() {
                   {loading ? "Disconnecting..." : "Disconnect"}
                 </Button>
               ) : (
-                <Button
+                <Button 
                   onClick={connectToGoogle}
                   disabled={loading}
                 >
                   {loading ? "Connecting..." : "Connect"}
                 </Button>
               )}
-              <Button
-                variant="secondary"
+              <Button 
+                variant="secondary" 
                 size="sm"
                 onClick={checkGoogleStatus}
                 disabled={checkingStatus}
@@ -198,8 +183,7 @@ function Settings() {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${checkingStatus ? 'bg-yellow-500' : calendarConnected ? 'bg-green-500' : 'bg-red-500'
-                  }`} />
+                <div className={`${checkingStatus ? 'bg-yellow-500' : calendarConnected ? 'bg-green-500' : 'bg-red-500'} w-2 h-2 rounded-full`} />
                 <span className="text-sm text-gray-600">
                   {checkingStatus ? "Checking" : calendarConnected ? "Connected" : "Disconnected"}
                 </span>
@@ -219,15 +203,15 @@ function Settings() {
                   {calendarLoading ? "Disconnecting..." : "Disconnect"}
                 </Button>
               ) : (
-                <Button
+                <Button 
                   onClick={connectToGoogle}
                   disabled={calendarLoading || loading}
                 >
                   {calendarLoading || loading ? "Connecting..." : "Connect"}
                 </Button>
               )}
-              <Button
-                variant="secondary"
+              <Button 
+                variant="secondary" 
                 size="sm"
                 onClick={checkGoogleStatus}
                 disabled={checkingStatus}

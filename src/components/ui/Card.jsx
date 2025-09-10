@@ -1,15 +1,11 @@
-function Card({ title, action, children }) {
+import React from 'react';
+
+export default function Card({ children, className = '', title, footer }) {
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      {(title || action) && (
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
-          {action}
-        </div>
-      )}
-      <div className="p-4">{children}</div>
+    <div className={`card ${className}`}>
+      {title && <div className="mb-3 flex items-center justify-between"><div className="font-medium text-sm">{title}</div></div>}
+      <div>{children}</div>
+      {footer && <div className="mt-4 text-sm text-[var(--text-muted)]">{footer}</div>}
     </div>
   );
 }
-
-export default Card;
