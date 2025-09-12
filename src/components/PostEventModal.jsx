@@ -5,6 +5,8 @@ import Input from "./ui/Input.jsx";
 import Textarea from "./ui/Textarea.jsx";
 import { toast } from "sonner";
 import moment from "moment";
+import { apiFetch, apiUrl } from "../lib/api.js";
+import apiClient from "../lib/apiClient.js";
 
 const PostEventModal = ({ 
   isOpen, 
@@ -46,17 +48,41 @@ const PostEventModal = ({
 
   const fetchPostData = async (postId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/posts/${postId}`);
-      const data = await response.json();
-      if (data.success && data.post) {
-        setPostData(data.post);
-        // Update form with post data
-        setFormData(prev => ({
-          ...prev,
-          title: `📱 ${data.post.original_description?.substring(0, 50)}...`,
-          description: data.post.caption || data.post.original_description,
-          image_url: data.post.image_path || data.post.image_url || ""
-        }));
+      // First try to fetch the specific post
+      try {
+        const postResp = await apiFetch(`/api/posts/${postId}`);
+        const postDataResp = await postResp.json();
+        if (postDataResp.success && postDataResp.post) {
+          console.log('Post data from database:', postDataResp.post);
+          setPostData(postDataResp.post);
+          setFormData(prev => ({
+            ...prev,
+            title: `📱 ${postDataResp.post.original_description?.substring(0, 50)}...`,
+            description: postDataResp.post.caption || postDataResp.post.original_description,
+            image_url: postDataResp.post.image_path || postDataResp.post.image_url || ""
+          }));
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch single post, trying fallback:', e);
+      }
+      
+      // Fallback: get all posts and find the one we want
+      const data = await apiClient.getPosts({ limit: 100 });
+      if (data && data.success && data.posts) {
+        const p = data.posts.find(x => String(x.id) === String(postId));
+        if (p) {
+          console.log('Post data from fallback:', p);
+          setPostData(p);
+          setFormData(prev => ({
+            ...prev,
+            title: `📱 ${p.original_description?.substring(0, 50)}...`,
+            description: p.caption || p.original_description,
+            image_url: p.image_path || p.image_url || ""
+          }));
+        } else {
+          console.warn(`Post with ID ${postId} not found in ${data.posts.length} posts`);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch post data:", error);
@@ -106,7 +132,7 @@ const PostEventModal = ({
       // If this event is linked to a post, also update the post in database
       if (event.post_id) {
         try {
-          const postUpdateResponse = await fetch(`http://localhost:8000/api/posts/${event.post_id}`, {
+          const postUpdateResponse = await apiFetch(`/api/posts/${event.post_id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -185,25 +211,25 @@ const PostEventModal = ({
         {/* Generated Image Display */}
         {formData.image_url && (
           <div className="mb-3">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-contrast mb-1">
               Generated Image
             </label>
             <div className="border rounded-lg overflow-hidden bg-gray-50">
               <img
-                src={formData.image_url.startsWith('/') ? `http://localhost:8000${formData.image_url}` : formData.image_url}
+                src={formData.image_url.startsWith('/') ? apiUrl(formData.image_url) : formData.image_url}
                 alt="Post preview"
-                className="w-full h-32 object-cover"
+                className="w-full h-12 object-cover"
                 onError={(e) => {
                   e.target.style.display = 'none';
                   e.target.nextSibling.style.display = 'flex';
                 }}
               />
               <div 
-                className="w-full h-32 flex items-center justify-center text-gray-400 bg-gray-100"
+                className="w-full h-12 flex items-center justify-center text-gray-400 bg-gray-100"
                 style={{ display: 'none' }}
               >
                 <div className="text-center">
-                  <div className="text-2xl mb-1">🖼️</div>
+                  <div className="text-xl mb-1">🖼️</div>
                   <div className="text-xs">Image not available</div>
                 </div>
               </div>
@@ -213,17 +239,17 @@ const PostEventModal = ({
 
         {/* Event Title - Non-editable */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-contrast mb-1">
             Event Title
           </label>
-          <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+          <div className="w-full px-3 py-2 border border-[var(--border)] rounded-md bg-[var(--bg-muted)] text-sm text-contrast">
             {formData.title}
           </div>
         </div>
 
         {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-contrast mb-1">
             Description
           </label>
           <Textarea
@@ -233,14 +259,14 @@ const PostEventModal = ({
             rows={3}
             disabled={isLoading}
           />
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-xs text-muted-contrast mt-1">
             {formData.description.length}/280 characters
           </div>
         </div>
 
         {/* Scheduled Date & Time */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-contrast mb-1">
             Scheduled Date & Time
           </label>
           
@@ -259,7 +285,7 @@ const PostEventModal = ({
                     handleInputChange("scheduled_time", combined);
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-contrast bg-[var(--surface)]"
                 disabled={isLoading}
                 required
                 min={moment().format("YYYY-MM-DD")}
@@ -279,25 +305,57 @@ const PostEventModal = ({
                     handleInputChange("scheduled_time", combined);
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                className="w-full px-3 py-2 border border-[var(--border)] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-contrast bg-[var(--surface)]"
                 disabled={isLoading}
                 required
               />
             </div>
-            <div className="col-span-2 text-xs text-gray-500">
+            <div className="col-span-2 text-xs text-muted-contrast">
               Select date and time separately
             </div>
           </div>
         </div>
 
         {/* Post Information Display */}
-        {postData && (
-          <div className="bg-gray-50 p-2 rounded-md">
-            <h4 className="text-xs font-medium text-gray-900 mb-1">Post Information</h4>
-            <div className="text-xs text-gray-600 space-y-0.5">
-              <div><strong>Platform:</strong> {postData.platform}</div>
-              <div><strong>Status:</strong> {postData.status}</div>
-              <div><strong>Created:</strong> {new Date(postData.created_at).toLocaleDateString()}</div>
+        {(postData || event) && (
+          <div className="bg-[var(--bg-muted)] p-2 rounded-md">
+            <h4 className="text-xs font-medium text-contrast mb-1">Post Information</h4>
+            <div className="text-xs text-muted-contrast space-y-0.5">
+              <div><strong>Platform:</strong> {
+                (() => {
+                  // Try multiple platform field formats
+                  let platformValue = null;
+                  
+                  // Check postData first (from database)
+                  if (postData) {
+                    if (Array.isArray(postData.platforms) && postData.platforms.length > 0) {
+                      platformValue = postData.platforms.join(', ');
+                    } else if (postData.platform) {
+                      platformValue = postData.platform;
+                    }
+                  }
+                  
+                  // Check event data if postData doesn't have platform info
+                  if (!platformValue && event) {
+                    if (Array.isArray(event.platforms) && event.platforms.length > 0) {
+                      platformValue = event.platforms.join(', ');
+                    } else if (event.platform) {
+                      platformValue = event.platform;
+                    }
+                  }
+                  
+                  // Capitalize first letter if we found a platform
+                  if (platformValue) {
+                    return platformValue.split(', ').map(p => 
+                      p.charAt(0).toUpperCase() + p.slice(1)
+                    ).join(', ');
+                  }
+                  
+                  return 'Not specified';
+                })()
+              }</div>
+              <div><strong>Status:</strong> {postData?.status || event?.status || 'scheduled'}</div>
+              <div><strong>Created:</strong> {new Date(postData?.created_at || event?.created_at || Date.now()).toLocaleDateString()}</div>
             </div>
           </div>
         )}
@@ -308,6 +366,7 @@ const PostEventModal = ({
             variant="secondary"
             onClick={handleClose}
             disabled={isLoading}
+            className="text-sm px-3 py-1.5 scale-90"
           >
             Cancel
           </Button>
@@ -316,6 +375,7 @@ const PostEventModal = ({
             variant="danger"
             onClick={handleDelete}
             disabled={isLoading}
+            className="text-sm px-3 py-1.5 scale-90"
           >
             Delete
           </Button>
@@ -324,6 +384,7 @@ const PostEventModal = ({
             variant="primary"
             onClick={handleSave}
             disabled={isLoading}
+            className="text-sm px-3 py-1.5 scale-90"
           >
             {isLoading ? "Saving..." : "Save Changes"}
           </Button>

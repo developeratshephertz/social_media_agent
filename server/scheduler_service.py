@@ -289,6 +289,29 @@ class SchedulerService:
         
         return image_path
     
+    async def _update_calendar_events_for_post(self, post_id: str, status: str):
+        """Update calendar events for a post to reflect the new status"""
+        try:
+            from database import db_manager
+            
+            # Update calendar events for this post
+            calendar_update_query = """
+                UPDATE calendar_events 
+                SET status = :status, 
+                    updated_at = NOW()
+                WHERE post_id = :post_id
+            """
+            
+            await db_manager.execute_query(calendar_update_query, {
+                "post_id": str(post_id),
+                "status": status
+            })
+            
+            logger.info(f"Updated calendar events for post {post_id} to status: {status}")
+            
+        except Exception as e:
+            logger.error(f"Error updating calendar events for post {post_id}: {e}")
+
     async def _mark_post_published_multi_platform(self, post_id: str, platform_results: Dict[str, Any]):
         """Mark a post as successfully published to all platforms"""
         try:
@@ -334,6 +357,10 @@ class SchedulerService:
             await db_manager.execute_query(metrics_query, {"post_id": post_id})
             
             successful_platforms = list(platform_results.keys())
+            
+            # Update calendar events for this post
+            await self._update_calendar_events_for_post(post_id, "published")
+            
             logger.info(f"Marked post {post_id} as published to all platforms: {successful_platforms}")
             
         except Exception as e:
@@ -388,6 +415,9 @@ class SchedulerService:
             
             await db_manager.execute_query(metrics_query, {"post_id": post_id})
             
+            # Update calendar events for this post
+            await self._update_calendar_events_for_post(post_id, "partially_published")
+            
             logger.info(f"Marked post {post_id} as partially published - Success: {successful_platforms}, Failed: {failed_platforms}")
             
         except Exception as e:
@@ -430,6 +460,9 @@ class SchedulerService:
             """
             
             await db_manager.execute_query(metrics_query, {"post_id": post_id})
+            
+            # Update calendar events for this post
+            await self._update_calendar_events_for_post(post_id, "failed")
             
             logger.info(f"Marked post {post_id} as failed: {error_message}")
             

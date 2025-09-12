@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import clsx from "clsx";
+import ThemeToggle from "../components/ThemeToggle.jsx";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: "home" },
@@ -82,67 +83,70 @@ function Icon({ name, className }) {
 function Sidebar() {
   const { pathname } = useLocation();
   return (
-    <aside className="fixed left-0 top-0 h-full w-[280px] bg-white border-r border-gray-200 shadow-sm flex flex-col">
-      {/* Agent Anywhere Logo */}
-      <div className="h-12 flex items-center justify-center px-6 py-2 border-b border-gray-50">
-        <img 
-          src="/agent-anywhere-logo.png" 
-          alt="Agent Anywhere" 
-          className="h-8 w-auto"
+    <aside className="fixed left-0 top-0 h-full w-[280px] glass-hover flex flex-col z-20 shadow-lg">
+      {/* Header with Logo and Theme Toggle */}
+      <div className="h-20 flex items-center justify-between px-6 py-4 relative">
+        <div className="absolute inset-0 bg-gradient-primary opacity-20 rounded-t-3xl blur-sm text-black"></div>
+        <img
+          src="/agent-anywhere-logo.svg"
+          alt="Agent Anywhere"
+          className="h-10 w-auto relative z-10 drop-shadow-lg text-black"
         />
+        <ThemeToggle />
       </div>
-      
+
       {/* Social Media Agent Section */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+      <div className="h-20 flex items-center px-6 relative">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-primary flex items-center justify-center animate-glow shadow-xl">
+            <svg className="w-6 h-6 text-black" viewBox="0 0 24 24" fill="currentColor">
               <path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
             </svg>
           </div>
-          <span className="font-semibold text-lg">Social Media Agent</span>
+          <div className="flex flex-col">
+            <span className="font-extrabold text-lg gradient-primary-text">Social Media</span>
+            <span className="font-medium text-sm gradient-primary-text opacity-85">Agent</span>
+          </div>
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto py-4">
-        <ul className="px-2 space-y-1">
+      <nav className="flex-1 overflow-y-auto py-6">
+        <ul className="px-4 space-y-2">
           {navItems.map((item) => (
             <li key={item.to}>
               <NavLink
                 to={item.to}
                 className={({ isActive }) =>
                   clsx(
-                    "flex items-center gap-3 px-4 py-2.5 rounded-md text-sm font-medium",
+                    "flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-300 group",
                     isActive || pathname.startsWith(item.to)
-                      ? "bg-blue-50 text-blue-600"
-                      : "text-gray-700 hover:bg-gray-100"
+                      ? "bg-gradient-primary text-black shadow-lg scale-105"
+                            : "text-black/90 hover:bg-white/10 hover:text-black hover:scale-102 backdrop-blur-sm"
                   )
                 }
               >
                 <Icon
                   name={item.icon}
                   className={clsx(
+                    "w-5 h-5 transition-colors duration-200",
                     pathname.startsWith(item.to)
-                      ? "text-blue-600"
-                      : "text-gray-500"
+                      ? "text-black"
+                      : "text-black/70 group-hover:text-black"
                   )}
                 />
-                {item.label}
+                <span className="font-semibold">{item.label}</span>
+                {pathname.startsWith(item.to) && (
+                    <div className="ml-auto w-2 h-2 bg-black rounded-full animate-pulse"></div>
+                )}
               </NavLink>
             </li>
           ))}
         </ul>
       </nav>
-      <div className="p-4 border-t border-gray-100">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500" />
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">Alex Johnson</div>
-            <div className="text-xs text-gray-500">alex@example.com</div>
-          </div>
-        </div>
-      </div>
+
+      {/* helpers section removed per user request */}
     </aside>
   );
 }
 
 export default Sidebar;
+

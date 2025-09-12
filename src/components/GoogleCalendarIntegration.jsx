@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import Button from "./ui/Button.jsx";
 import { toast } from "sonner";
+import { apiFetch, apiUrl } from "../lib/api.js";
+import apiClient from "../lib/apiClient.js";
 
 const GoogleCalendarIntegration = ({ campaigns = [], onEventCreated }) => {
   const [isConnected, setIsConnected] = useState(false);
@@ -14,9 +16,8 @@ const GoogleCalendarIntegration = ({ campaigns = [], onEventCreated }) => {
 
   const checkGoogleStatus = async () => {
     try {
-      const response = await fetch("http://localhost:8000/google/status");
-      const data = await response.json();
-      setIsConnected(data.connected);
+      const data = await apiClient.getGoogleStatus();
+      setIsConnected(data && (data.connected || data.success));
     } catch (error) {
       console.error("Failed to check Google status:", error);
       setIsConnected(false);
@@ -27,13 +28,13 @@ const GoogleCalendarIntegration = ({ campaigns = [], onEventCreated }) => {
     try {
       setLoading(true);
       // Open Google OAuth in a new window
-      const response = await fetch("http://localhost:8000/google/connect");
+      const response = await apiFetch("/google/connect");
       if (response.ok) {
-        window.open("http://localhost:8000/google/connect", "_blank", "width=500,height=600");
+        window.open(apiUrl("/google/connect"), "_blank", "width=500,height=600");
         // Poll for connection status
         const pollInterval = setInterval(async () => {
           await checkGoogleStatus();
-          const statusResponse = await fetch("http://localhost:8000/google/status");
+          const statusResponse = await apiFetch("/google/status");
           const statusData = await statusResponse.json();
           if (statusData.connected) {
             setIsConnected(true);
@@ -80,7 +81,7 @@ const GoogleCalendarIntegration = ({ campaigns = [], onEventCreated }) => {
         ]
       };
 
-      const response = await fetch("http://localhost:8000/google-calendar/create-event", {
+      const response = await apiFetch("/google-calendar/create-event", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -158,7 +159,7 @@ const GoogleCalendarIntegration = ({ campaigns = [], onEventCreated }) => {
         </div>
         
         <div className="flex items-center space-x-2">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+          <div className={`${isConnected ? 'bg-green-500' : 'bg-red-500'} w-2 h-2 rounded-full`} />
           <span className="text-sm text-gray-600">
             {isConnected ? "Connected" : "Disconnected"}
           </span>

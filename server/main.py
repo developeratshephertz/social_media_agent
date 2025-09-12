@@ -2001,6 +2001,35 @@ if __name__ == "__main__":
     print("\n🚀 Starting Social Media Agent API...\n")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
 
+# Trending topics endpoints
+from trending_topics_service import trending_service
+
+@app.get("/api/trending/ai-topics")
+async def get_ai_trending_topics(category: Optional[str] = None):
+    """Get AI-powered trending topics with optional category filter"""
+    try:
+        result = trending_service.get_trending_topics(category)
+        return result
+    except Exception as e:
+        logger.error(f"Error getting trending topics: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/trending/refresh")
+async def refresh_trending_topics():
+    """Force refresh trending topics (bypass cache)"""
+    try:
+        result = trending_service.refresh_topics()
+        return result
+    except Exception as e:
+        logger.error(f"Error refreshing trending topics: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 # Frontend serving - must be after all API routes
 @app.get("/api/info")
 async def api_info():

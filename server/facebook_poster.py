@@ -24,7 +24,7 @@ class FacebookPoster:
         """Initialize with Facebook credentials from environment"""
         self.access_token = os.getenv("FACEBOOK_ACCESS_TOKEN")
         self.page_id = os.getenv("FACEBOOK_PAGE_ID")
-        self.graph_api_base = "https://graph.facebook.com/v18.0"
+        self.graph_api_base = "https://graph.facebook.com/v21.0"
         
         if not self.access_token:
             logger.warning("FACEBOOK_ACCESS_TOKEN not found in environment")

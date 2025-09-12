@@ -12,7 +12,7 @@ function Textarea({ label, maxLength = 280, error, className, ...props }) {
       {label && (
         <label
           htmlFor={id}
-          className="block text-sm font-medium text-gray-700 mb-1"
+          className="block text-sm font-bold text-white/90 mb-3"
         >
           {label}
         </label>
@@ -21,18 +21,20 @@ function Textarea({ label, maxLength = 280, error, className, ...props }) {
         id={id}
         maxLength={maxLength}
         className={clsx(
-          "w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-sm",
-          "px-3 py-2 min-h-[120px] resize-vertical",
-          error && "border-red-500 focus:border-red-500 focus:ring-red-500",
+          "w-full rounded-2xl glass-hover border backdrop-blur-sm text-sm text-white/90 placeholder-white/60",
+          "px-4 py-3 min-h-[120px] resize-vertical transition-all duration-300",
+          "focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/50",
+          "hover:bg-white/10",
+          error && "border-red-400/50 focus:border-red-400 focus:ring-red-400/50",
           className
         )}
         aria-invalid={!!error}
         onChange={(e) => setCount(e.target.value.length)}
         {...props}
       />
-      <div className="mt-1 flex justify-between text-xs">
-        {error ? <p className="text-red-600">{error}</p> : <span />}
-        <p className="text-gray-500">
+      <div className="mt-3 flex justify-between text-xs">
+        {error ? <p className="text-red-300">{error}</p> : <span />}
+        <p className="text-white/60 font-medium">
           {count}/{maxLength}
         </p>
       </div>

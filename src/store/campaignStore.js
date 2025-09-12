@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { apiUrl, API_BASE_URL } from "../lib/api.js";
+import apiClient from "../lib/apiClient.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -11,15 +13,14 @@ export const useCampaignStore = create((set, get) => ({
     notifications: true,
   },
   isLoading: false,
-
+  
   // Load campaigns from PostgreSQL
   loadCampaignsFromDB: async () => {
     set({ isLoading: true });
     try {
-      const response = await fetch("http://localhost:8000/api/posts?limit=50");
-      const data = await response.json();
+      const data = await apiClient.getPosts({ limit: 50 });
 
-      if (data.success && data.posts) {
+      if (data && data.success && data.posts) {
         const campaigns = data.posts.map(post => ({
           id: post.id,
           batchId: post.batch_id || null,
@@ -27,11 +28,10 @@ export const useCampaignStore = create((set, get) => ({
           productDescription: post.original_description,
           generatedContent: post.caption || "",
           scheduledAt: post.scheduled_at,
-          status: post.scheduled_at && (post.status === "scheduled" || post.status === "Scheduled") ? "Scheduled" :
-            (post.status === "posted" || post.status === "Posted" || post.status === "published") ? "Posted" :
-              (post.status === "partially_published") ? "Partially Posted" :
-                (post.status === "failed" || post.status === "Failed") ? "Failed" : "Draft",
-          imageUrl: post.image_path ? `http://localhost:8000${post.image_path}` : "",
+          status: post.scheduled_at && (post.status === "scheduled" || post.status === "Scheduled") ? "Scheduled" : 
+                 (post.status === "posted" || post.status === "Posted") ? "Posted" : 
+                 (post.status === "failed" || post.status === "Failed") ? "Failed" : "Draft",
+          imageUrl: post.image_path ? apiUrl(post.image_path) : "",
           // Add additional fields from database if they exist
           driveFileId: post.drive_file_id || null,
           driveImageUrl: post.drive_image_url || null,
@@ -47,16 +47,12 @@ export const useCampaignStore = create((set, get) => ({
               time: new Date(post.created_at).getTime() + 3000,
               text: `Scheduled for ${new Date(post.scheduled_at).toLocaleString()}`,
             } : null,
-            post.posted_at ? {
-              time: new Date(post.posted_at).getTime(),
-              text: `Posted to ${post.platforms ? post.platforms.join(', ') : 'social media'}`,
-            } : null,
           ].filter(Boolean),
         }));
-
+        
         set({ campaigns });
         console.log(`✅ Loaded ${campaigns.length} campaigns from database`);
-
+        
         // Store in localStorage as backup
         try {
           localStorage.setItem('campaigns_backup', JSON.stringify(campaigns));
@@ -126,52 +122,52 @@ export const useCampaignStore = create((set, get) => ({
         imageUrl ? { time: Date.now(), text: "AI image generated" } : null,
         scheduledAt
           ? {
-            time: Date.now(),
-            text: `Scheduled for ${new Date(scheduledAt).toLocaleString()}`,
-          }
+              time: Date.now(),
+              text: `Scheduled for ${new Date(scheduledAt).toLocaleString()}`,
+            }
           : null,
       ].filter(Boolean),
     };
-
+    
     // Add to local state immediately
     set((state) => ({ campaigns: [newCampaign, ...state.campaigns] }));
     get().addActivity(`Created campaign ${id}`);
-
-    console.log(`✅ Created campaign ${id} with batchId: ${batchId}`, newCampaign);
-
+    
     // Try to sync with database
     try {
       const postData = {
         original_description: description,
         caption: caption || "",
-        image_path: imageUrl?.replace('http://localhost:8000', '') || null,
+        image_path: imageUrl?.replace(API_BASE_URL, '') || null,
         scheduled_at: scheduledAt,
         status: status.toLowerCase(),
-        platforms: ["instagram"],
+        platform: "instagram",
         batch_id: batchId
       };
 
       console.log(`Saving campaign ${id} to database:`, postData);
-      // Note: We're not awaiting this to avoid blocking UI, but we should handle errors
-      fetch("http://localhost:8000/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postData)
-      }).then(response => response.json())
-        .then(data => {
-          if (data.success) {
+      // Fire-and-forget createPost to avoid blocking UI
+      apiClient.createPost(postData)
+        .then((data) => {
+          if (data && data.success && data.post_id) {
             console.log(`Campaign ${id} saved to database with ID: ${data.post_id}`);
+            // Replace temporary id with real DB id so future updates/deletes work
+            set((state) => ({
+              campaigns: state.campaigns.map((c) =>
+                c.id === id ? { ...c, id: String(data.post_id) } : c
+              ),
+            }));
           } else {
-            console.error(`Failed to save campaign ${id}:`, data.error);
+            console.error(`Failed to save campaign ${id}:`, data && (data.error || data.message));
           }
         })
-        .catch(error => {
+        .catch((error) => {
           console.error(`Database error for campaign ${id}:`, error);
         });
     } catch (error) {
       console.error("Error syncing campaign with database:", error);
     }
-
+    
     return id;
   },
   updateCampaign: async (id, updates) => {
@@ -181,7 +177,7 @@ export const useCampaignStore = create((set, get) => ({
         c.id === id ? { ...c, ...updates } : c
       ),
     }));
-
+    
     // Try to sync with database if this is a scheduling update
     if (updates.scheduledAt || updates.status) {
       try {
@@ -189,22 +185,17 @@ export const useCampaignStore = create((set, get) => ({
         if (campaign) {
           const postData = {
             scheduled_at: updates.scheduledAt || campaign.scheduledAt,
-            status: (updates.status || campaign.status).toLowerCase(),
-            platforms: updates.platforms || campaign.platforms
+            status: (updates.status || campaign.status).toLowerCase()
           };
-
+          
           console.log(`Updating campaign ${id} in database:`, postData);
           // Note: We're not awaiting this to avoid blocking UI
-          fetch(`http://localhost:8000/api/posts/${id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(postData)
-          }).then(response => response.json())
+          apiClient.updatePost(id, postData)
             .then(data => {
-              if (data.success) {
+              if (data && data.success) {
                 console.log(`Campaign ${id} updated in database`);
               } else {
-                console.error(`Failed to update campaign ${id}:`, data.error);
+                console.error(`Failed to update campaign ${id}:`, data && (data.error || data.message));
               }
             })
             .catch(error => {
@@ -222,25 +213,62 @@ export const useCampaignStore = create((set, get) => ({
         predicate(c) ? { ...c, ...updatesFn(c) } : c
       ),
     })),
-  deleteCampaign: (id) =>
-    set((state) => ({ campaigns: state.campaigns.filter((c) => c.id !== id) })),
+  deleteCampaign: async (id) => {
+    const prev = get().campaigns;
+    // Optimistic remove from local state
+    set((state) => ({ campaigns: state.campaigns.filter((c) => c.id !== id) }));
+    get().addActivity(`Deleted campaign ${id}`);
+    // Attempt backend delete; ignore if the id was only local (e.g., cmp_*)
+    try {
+      const resp = await apiClient.deletePost(id);
+      if (!resp || resp.success === false) {
+        console.warn(`Backend delete returned error for ${id}:`, resp && (resp.error || resp.message));
+      }
+    } catch (e) {
+      console.error(`Backend delete failed for ${id}:`, e);
+      // Optional: rollback on hard failure
+      // set({ campaigns: prev });
+    }
+  },
   deleteCampaignsWhere: (predicate) =>
     set((state) => ({
       campaigns: state.campaigns.filter((c) => !predicate(c)),
     })),
-  // Real-time status updates - only refresh from database, no fake posting
+  // Simulate real-time status updates
   tick: () => {
-    // Remove fake posting simulation - let the backend scheduler handle real posting
-    // The frontend should only display the actual status from the database
+    const now = Date.now();
+    set((state) => ({
+      campaigns: state.campaigns.map((c) => {
+        if (
+          c.status === "Scheduled" &&
+          c.scheduledAt &&
+          new Date(c.scheduledAt).getTime() <= now
+        ) {
+          const didFail = Math.random() < 0.1;
+          const status = didFail ? "Failed" : "Posted";
+          return {
+            ...c,
+            status,
+            activity: [
+              {
+                time: now,
+                text: status === "Posted" ? "Post published" : "Posting failed",
+              },
+              ...(c.activity || []),
+            ],
+          };
+        }
+        return c;
+      }),
+    }));
   },
 }));
 
-// Start a simple interval for real-time updates - refresh from database
+// Start a simple interval for real-time updates
 if (typeof window !== "undefined") {
   setInterval(() => {
     try {
-      // Refresh campaigns from database to get real status updates
-      useCampaignStore.getState().loadCampaignsFromDB();
-    } catch { }
-  }, 10000); // Check every 10 seconds instead of 5
+      useCampaignStore.getState().tick();
+    } catch {}
+  }, 5000);
 }
