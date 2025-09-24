@@ -1,0 +1,2176 @@
+[
+    {
+        "label": "uuid",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "uuid",
+        "description": "uuid",
+        "detail": "uuid",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timedelta",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timezone",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timedelta",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timedelta",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timezone",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timedelta",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timedelta",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timedelta",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Session",
+        "importPath": "sqlalchemy.orm",
+        "description": "sqlalchemy.orm",
+        "isExtraImport": true,
+        "detail": "sqlalchemy.orm",
+        "documentation": {}
+    },
+    {
+        "label": "Session",
+        "importPath": "sqlalchemy.orm",
+        "description": "sqlalchemy.orm",
+        "isExtraImport": true,
+        "detail": "sqlalchemy.orm",
+        "documentation": {}
+    },
+    {
+        "label": "relationship",
+        "importPath": "sqlalchemy.orm",
+        "description": "sqlalchemy.orm",
+        "isExtraImport": true,
+        "detail": "sqlalchemy.orm",
+        "documentation": {}
+    },
+    {
+        "label": "and_",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "or_",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "desc",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "and_",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "or_",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "desc",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "Column",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "String",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "Text",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "Integer",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "Boolean",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "DateTime",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "ForeignKey",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "JSON",
+        "importPath": "sqlalchemy",
+        "description": "sqlalchemy",
+        "isExtraImport": true,
+        "detail": "sqlalchemy",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarEvent",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "Post",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarEventResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "Campaign",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "Post",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "Image",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "Caption",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "PostingSchedule",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "BatchOperation",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "PostResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "CampaignResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "ImageResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "CaptionResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "PostingScheduleResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "BatchOperationResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "PostResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarEventResponse",
+        "importPath": "models",
+        "description": "models",
+        "isExtraImport": true,
+        "detail": "models",
+        "documentation": {}
+    },
+    {
+        "label": "get_sync_db",
+        "importPath": "database",
+        "description": "database",
+        "isExtraImport": true,
+        "detail": "database",
+        "documentation": {}
+    },
+    {
+        "label": "db_manager",
+        "importPath": "database",
+        "description": "database",
+        "isExtraImport": true,
+        "detail": "database",
+        "documentation": {}
+    },
+    {
+        "label": "get_sync_db",
+        "importPath": "database",
+        "description": "database",
+        "isExtraImport": true,
+        "detail": "database",
+        "documentation": {}
+    },
+    {
+        "label": "startup_db",
+        "importPath": "database",
+        "description": "database",
+        "isExtraImport": true,
+        "detail": "database",
+        "documentation": {}
+    },
+    {
+        "label": "shutdown_db",
+        "importPath": "database",
+        "description": "database",
+        "isExtraImport": true,
+        "detail": "database",
+        "documentation": {}
+    },
+    {
+        "label": "get_database",
+        "importPath": "database",
+        "description": "database",
+        "isExtraImport": true,
+        "detail": "database",
+        "documentation": {}
+    },
+    {
+        "label": "Base",
+        "importPath": "database",
+        "description": "database",
+        "isExtraImport": true,
+        "detail": "database",
+        "documentation": {}
+    },
+    {
+        "label": "logging",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "logging",
+        "description": "logging",
+        "detail": "logging",
+        "documentation": {}
+    },
+    {
+        "label": "os",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "os",
+        "description": "os",
+        "detail": "os",
+        "documentation": {}
+    },
+    {
+        "label": "re",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "re",
+        "description": "re",
+        "detail": "re",
+        "documentation": {}
+    },
+    {
+        "label": "Image",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
+        "label": "Image",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
+        "label": "Image",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
+        "label": "ImageDraw",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
+        "label": "ImageFont",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
+        "label": "Path",
+        "importPath": "pathlib",
+        "description": "pathlib",
+        "isExtraImport": true,
+        "detail": "pathlib",
+        "documentation": {}
+    },
+    {
+        "label": "requests",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "requests",
+        "description": "requests",
+        "detail": "requests",
+        "documentation": {}
+    },
+    {
+        "label": "json",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "json",
+        "description": "json",
+        "detail": "json",
+        "documentation": {}
+    },
+    {
+        "label": "load_dotenv",
+        "importPath": "dotenv",
+        "description": "dotenv",
+        "isExtraImport": true,
+        "detail": "dotenv",
+        "documentation": {}
+    },
+    {
+        "label": "load_dotenv",
+        "importPath": "dotenv",
+        "description": "dotenv",
+        "isExtraImport": true,
+        "detail": "dotenv",
+        "documentation": {}
+    },
+    {
+        "label": "load_dotenv",
+        "importPath": "dotenv",
+        "description": "dotenv",
+        "isExtraImport": true,
+        "detail": "dotenv",
+        "documentation": {}
+    },
+    {
+        "label": "convert_url_to_local_path",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_facebook",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_twitter",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_reddit",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_url_to_local_path",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_facebook",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_twitter",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_reddit",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "validate_local_image_path",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "get_image_info",
+        "importPath": "image_path_utils",
+        "description": "image_path_utils",
+        "isExtraImport": true,
+        "detail": "image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "APIRouter",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "Depends",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "HTTPException",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "status",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "FastAPI",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "HTTPException",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "Depends",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "APIRouter",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "HTTPException",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "status",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "RedirectResponse",
+        "importPath": "fastapi.responses",
+        "description": "fastapi.responses",
+        "isExtraImport": true,
+        "detail": "fastapi.responses",
+        "documentation": {}
+    },
+    {
+        "label": "FileResponse",
+        "importPath": "fastapi.responses",
+        "description": "fastapi.responses",
+        "isExtraImport": true,
+        "detail": "fastapi.responses",
+        "documentation": {}
+    },
+    {
+        "label": "FileResponse",
+        "importPath": "fastapi.responses",
+        "description": "fastapi.responses",
+        "isExtraImport": true,
+        "detail": "fastapi.responses",
+        "documentation": {}
+    },
+    {
+        "label": "Flow",
+        "importPath": "google_auth_oauthlib.flow",
+        "description": "google_auth_oauthlib.flow",
+        "isExtraImport": true,
+        "detail": "google_auth_oauthlib.flow",
+        "documentation": {}
+    },
+    {
+        "label": "Credentials",
+        "importPath": "google.oauth2.credentials",
+        "description": "google.oauth2.credentials",
+        "isExtraImport": true,
+        "detail": "google.oauth2.credentials",
+        "documentation": {}
+    },
+    {
+        "label": "Request",
+        "importPath": "google.auth.transport.requests",
+        "description": "google.auth.transport.requests",
+        "isExtraImport": true,
+        "detail": "google.auth.transport.requests",
+        "documentation": {}
+    },
+    {
+        "label": "build",
+        "importPath": "googleapiclient.discovery",
+        "description": "googleapiclient.discovery",
+        "isExtraImport": true,
+        "detail": "googleapiclient.discovery",
+        "documentation": {}
+    },
+    {
+        "label": "MediaIoBaseUpload",
+        "importPath": "googleapiclient.http",
+        "description": "googleapiclient.http",
+        "isExtraImport": true,
+        "detail": "googleapiclient.http",
+        "documentation": {}
+    },
+    {
+        "label": "BaseModel",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "BaseModel",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "BaseModel",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "BaseModel",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "validator",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "io",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "io",
+        "description": "io",
+        "detail": "io",
+        "documentation": {}
+    },
+    {
+        "label": "time",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "time",
+        "description": "time",
+        "detail": "time",
+        "documentation": {}
+    },
+    {
+        "label": "CORSMiddleware",
+        "importPath": "fastapi.middleware.cors",
+        "description": "fastapi.middleware.cors",
+        "isExtraImport": true,
+        "detail": "fastapi.middleware.cors",
+        "documentation": {}
+    },
+    {
+        "label": "StaticFiles",
+        "importPath": "fastapi.staticfiles",
+        "description": "fastapi.staticfiles",
+        "isExtraImport": true,
+        "detail": "fastapi.staticfiles",
+        "documentation": {}
+    },
+    {
+        "label": "base64",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "base64",
+        "description": "base64",
+        "detail": "base64",
+        "documentation": {}
+    },
+    {
+        "label": "hashlib",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "hashlib",
+        "description": "hashlib",
+        "detail": "hashlib",
+        "documentation": {}
+    },
+    {
+        "label": "textwrap",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "textwrap",
+        "description": "textwrap",
+        "detail": "textwrap",
+        "documentation": {}
+    },
+    {
+        "label": "asynccontextmanager",
+        "importPath": "contextlib",
+        "description": "contextlib",
+        "isExtraImport": true,
+        "detail": "contextlib",
+        "documentation": {}
+    },
+    {
+        "label": "router",
+        "importPath": "google_complete",
+        "description": "google_complete",
+        "isExtraImport": true,
+        "detail": "google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "db_service",
+        "importPath": "database_service",
+        "description": "database_service",
+        "isExtraImport": true,
+        "detail": "database_service",
+        "documentation": {}
+    },
+    {
+        "label": "db_service",
+        "importPath": "database_service",
+        "description": "database_service",
+        "isExtraImport": true,
+        "detail": "database_service",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarService",
+        "importPath": "calendar_service",
+        "description": "calendar_service",
+        "isExtraImport": true,
+        "detail": "calendar_service",
+        "documentation": {}
+    },
+    {
+        "label": "scheduler_service",
+        "importPath": "scheduler_service",
+        "description": "scheduler_service",
+        "isExtraImport": true,
+        "detail": "scheduler_service",
+        "documentation": {}
+    },
+    {
+        "label": "start_scheduler",
+        "importPath": "scheduler_service",
+        "description": "scheduler_service",
+        "isExtraImport": true,
+        "detail": "scheduler_service",
+        "documentation": {}
+    },
+    {
+        "label": "stop_scheduler",
+        "importPath": "scheduler_service",
+        "description": "scheduler_service",
+        "isExtraImport": true,
+        "detail": "scheduler_service",
+        "documentation": {}
+    },
+    {
+        "label": "router",
+        "importPath": "social_media_routes",
+        "description": "social_media_routes",
+        "isExtraImport": true,
+        "detail": "social_media_routes",
+        "documentation": {}
+    },
+    {
+        "label": "facebook_analytics",
+        "importPath": "facebook_analytics_service",
+        "description": "facebook_analytics_service",
+        "isExtraImport": true,
+        "detail": "facebook_analytics_service",
+        "documentation": {}
+    },
+    {
+        "label": "facebook_manager",
+        "importPath": "facebook_manager",
+        "description": "facebook_manager",
+        "isExtraImport": true,
+        "detail": "facebook_manager",
+        "documentation": {}
+    },
+    {
+        "label": "facebook_manager",
+        "importPath": "facebook_manager",
+        "description": "facebook_manager",
+        "isExtraImport": true,
+        "detail": "facebook_manager",
+        "documentation": {}
+    },
+    {
+        "label": "reddit_service",
+        "importPath": "reddit_service",
+        "description": "reddit_service",
+        "isExtraImport": true,
+        "detail": "reddit_service",
+        "documentation": {}
+    },
+    {
+        "label": "reddit_analytics_service",
+        "importPath": "reddit_analytics_service",
+        "description": "reddit_analytics_service",
+        "isExtraImport": true,
+        "detail": "reddit_analytics_service",
+        "documentation": {}
+    },
+    {
+        "label": "twitter_analytics_service",
+        "importPath": "twitter_analytics_service",
+        "description": "twitter_analytics_service",
+        "isExtraImport": true,
+        "detail": "twitter_analytics_service",
+        "documentation": {}
+    },
+    {
+        "label": "trending_service",
+        "importPath": "trending_topics_service",
+        "description": "trending_topics_service",
+        "isExtraImport": true,
+        "detail": "trending_topics_service",
+        "documentation": {}
+    },
+    {
+        "label": "UUID",
+        "importPath": "sqlalchemy.dialects.postgresql",
+        "description": "sqlalchemy.dialects.postgresql",
+        "isExtraImport": true,
+        "detail": "sqlalchemy.dialects.postgresql",
+        "documentation": {}
+    },
+    {
+        "label": "ARRAY",
+        "importPath": "sqlalchemy.dialects.postgresql",
+        "description": "sqlalchemy.dialects.postgresql",
+        "isExtraImport": true,
+        "detail": "sqlalchemy.dialects.postgresql",
+        "documentation": {}
+    },
+    {
+        "label": "func",
+        "importPath": "sqlalchemy.sql",
+        "description": "sqlalchemy.sql",
+        "isExtraImport": true,
+        "detail": "sqlalchemy.sql",
+        "documentation": {}
+    },
+    {
+        "label": "asyncio",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "asyncio",
+        "description": "asyncio",
+        "detail": "asyncio",
+        "documentation": {}
+    },
+    {
+        "label": "post_to_facebook",
+        "importPath": "facebook_poster",
+        "description": "facebook_poster",
+        "isExtraImport": true,
+        "detail": "facebook_poster",
+        "documentation": {}
+    },
+    {
+        "label": "verify_facebook_setup",
+        "importPath": "facebook_poster",
+        "description": "facebook_poster",
+        "isExtraImport": true,
+        "detail": "facebook_poster",
+        "documentation": {}
+    },
+    {
+        "label": "TwitterAdapter",
+        "importPath": "twitter_adapter",
+        "description": "twitter_adapter",
+        "isExtraImport": true,
+        "detail": "twitter_adapter",
+        "documentation": {}
+    },
+    {
+        "label": "RedditAPI",
+        "importPath": "reddit_adapter",
+        "description": "reddit_adapter",
+        "isExtraImport": true,
+        "detail": "reddit_adapter",
+        "documentation": {}
+    },
+    {
+        "label": "env_manager",
+        "importPath": "env_manager",
+        "description": "env_manager",
+        "isExtraImport": true,
+        "detail": "env_manager",
+        "documentation": {}
+    },
+    {
+        "label": "sys",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "sys",
+        "description": "sys",
+        "detail": "sys",
+        "documentation": {}
+    },
+    {
+        "label": "tempfile",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "tempfile",
+        "description": "tempfile",
+        "detail": "tempfile",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarService",
+        "kind": 6,
+        "importPath": "server.calendar_service",
+        "description": "server.calendar_service",
+        "peekOfCode": "class CalendarService:\n    \"\"\"Service class for calendar event operations\"\"\"\n    def __init__(self, db: Session):\n        self.db = db\n    def create_event(self, event_data: Dict[str, Any]) -> Optional[CalendarEventResponse]:\n        \"\"\"Create a new calendar event\"\"\"\n        try:\n            # Extract and validate required fields\n            title = event_data.get('title', '').strip()\n            start_time = event_data.get('start_time')",
+        "detail": "server.calendar_service",
+        "documentation": {}
+    },
+    {
+        "label": "get_calendar_service",
+        "kind": 2,
+        "importPath": "server.calendar_service",
+        "description": "server.calendar_service",
+        "peekOfCode": "def get_calendar_service(db: Session = None) -> CalendarService:\n    \"\"\"Get a calendar service instance\"\"\"\n    if db is None:\n        db = next(get_sync_db())\n    return CalendarService(db)",
+        "detail": "server.calendar_service",
+        "documentation": {}
+    },
+    {
+        "label": "logger",
+        "kind": 5,
+        "importPath": "server.calendar_service",
+        "description": "server.calendar_service",
+        "peekOfCode": "logger = logging.getLogger(__name__)\nclass CalendarService:\n    \"\"\"Service class for calendar event operations\"\"\"\n    def __init__(self, db: Session):\n        self.db = db\n    def create_event(self, event_data: Dict[str, Any]) -> Optional[CalendarEventResponse]:\n        \"\"\"Create a new calendar event\"\"\"\n        try:\n            # Extract and validate required fields\n            title = event_data.get('title', '').strip()",
+        "detail": "server.calendar_service",
+        "documentation": {}
+    },
+    {
+        "label": "DatabaseService",
+        "kind": 6,
+        "importPath": "server.database_service",
+        "description": "server.database_service",
+        "peekOfCode": "class DatabaseService:\n    \"\"\"Service class for database operations\"\"\"\n    @staticmethod\n    async def create_post(\n        campaign_name: str = None,\n        original_description: str = None,\n        caption: str = None,\n        image_path: str = None,\n        scheduled_at: datetime = None,\n        campaign_id: str = None,",
+        "detail": "server.database_service",
+        "documentation": {}
+    },
+    {
+        "label": "db_service",
+        "kind": 5,
+        "importPath": "server.database_service",
+        "description": "server.database_service",
+        "peekOfCode": "db_service = DatabaseService()",
+        "detail": "server.database_service",
+        "documentation": {}
+    },
+    {
+        "label": "EnvManager",
+        "kind": 6,
+        "importPath": "server.env_manager",
+        "description": "server.env_manager",
+        "peekOfCode": "class EnvManager:\n    \"\"\"Manages environment variable files securely\"\"\"\n    def __init__(self, env_file_path: str = \".env\"):\n        self.env_file_path = Path(env_file_path)\n        self.ensure_env_file_exists()\n    def ensure_env_file_exists(self):\n        \"\"\"Create .env file if it doesn't exist\"\"\"\n        if not self.env_file_path.exists():\n            self.env_file_path.touch()\n    def read_env_vars(self) -> Dict[str, str]:",
+        "detail": "server.env_manager",
+        "documentation": {}
+    },
+    {
+        "label": "env_manager",
+        "kind": 5,
+        "importPath": "server.env_manager",
+        "description": "server.env_manager",
+        "peekOfCode": "env_manager = EnvManager('.env')",
+        "detail": "server.env_manager",
+        "documentation": {}
+    },
+    {
+        "label": "FacebookPoster",
+        "kind": 6,
+        "importPath": "server.facebook_poster",
+        "description": "server.facebook_poster",
+        "peekOfCode": "class FacebookPoster:\n    \"\"\"Clean implementation for posting scheduled content to Facebook\"\"\"\n    def __init__(self):\n        \"\"\"Initialize with Facebook credentials from environment\"\"\"\n        self.access_token = os.getenv(\"FACEBOOK_ACCESS_TOKEN\")\n        self.page_id = os.getenv(\"FACEBOOK_PAGE_ID\")\n        self.graph_api_base = \"https://graph.facebook.com/v21.0\"\n        if not self.access_token:\n            logger.warning(\"FACEBOOK_ACCESS_TOKEN not found in environment\")\n        if not self.page_id:",
+        "detail": "server.facebook_poster",
+        "documentation": {}
+    },
+    {
+        "label": "post_to_facebook",
+        "kind": 2,
+        "importPath": "server.facebook_poster",
+        "description": "server.facebook_poster",
+        "peekOfCode": "def post_to_facebook(caption: str, image_path: Optional[str] = None) -> Dict[str, Any]:\n    \"\"\"\n    Post content to Facebook\n    Args:\n        caption: Text content/caption\n        image_path: Optional path to image file\n    Returns:\n        Dictionary with posting result\n    \"\"\"\n    if image_path:",
+        "detail": "server.facebook_poster",
+        "documentation": {}
+    },
+    {
+        "label": "verify_facebook_setup",
+        "kind": 2,
+        "importPath": "server.facebook_poster",
+        "description": "server.facebook_poster",
+        "peekOfCode": "def verify_facebook_setup() -> Dict[str, Any]:\n    \"\"\"Verify Facebook configuration\"\"\"\n    return facebook_poster.verify_credentials()\nif __name__ == \"__main__\":\n    # Test the adapter\n    print(\"Facebook Poster Adapter\")\n    print(\"-\" * 40)\n    # Check configuration\n    if facebook_poster.is_configured():\n        print(\"✅ Facebook credentials found in environment\")",
+        "detail": "server.facebook_poster",
+        "documentation": {}
+    },
+    {
+        "label": "logger",
+        "kind": 5,
+        "importPath": "server.facebook_poster",
+        "description": "server.facebook_poster",
+        "peekOfCode": "logger = logging.getLogger(__name__)\nclass FacebookPoster:\n    \"\"\"Clean implementation for posting scheduled content to Facebook\"\"\"\n    def __init__(self):\n        \"\"\"Initialize with Facebook credentials from environment\"\"\"\n        self.access_token = os.getenv(\"FACEBOOK_ACCESS_TOKEN\")\n        self.page_id = os.getenv(\"FACEBOOK_PAGE_ID\")\n        self.graph_api_base = \"https://graph.facebook.com/v21.0\"\n        if not self.access_token:\n            logger.warning(\"FACEBOOK_ACCESS_TOKEN not found in environment\")",
+        "detail": "server.facebook_poster",
+        "documentation": {}
+    },
+    {
+        "label": "facebook_poster",
+        "kind": 5,
+        "importPath": "server.facebook_poster",
+        "description": "server.facebook_poster",
+        "peekOfCode": "facebook_poster = FacebookPoster()\n# Convenience functions for direct usage\ndef post_to_facebook(caption: str, image_path: Optional[str] = None) -> Dict[str, Any]:\n    \"\"\"\n    Post content to Facebook\n    Args:\n        caption: Text content/caption\n        image_path: Optional path to image file\n    Returns:\n        Dictionary with posting result",
+        "detail": "server.facebook_poster",
+        "documentation": {}
+    },
+    {
+        "label": "Activity",
+        "kind": 6,
+        "importPath": "server.google_complete",
+        "description": "server.google_complete",
+        "peekOfCode": "class Activity(BaseModel):\n    time: int\n    text: str\nclass Campaign(BaseModel):\n    id: str\n    productDescription: str\n    generatedContent: str\n    scheduledAt: Optional[str]\n    status: str\n    imageUrl: Optional[str]",
+        "detail": "server.google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "Campaign",
+        "kind": 6,
+        "importPath": "server.google_complete",
+        "description": "server.google_complete",
+        "peekOfCode": "class Campaign(BaseModel):\n    id: str\n    productDescription: str\n    generatedContent: str\n    scheduledAt: Optional[str]\n    status: str\n    imageUrl: Optional[str]\n    driveImageUrl: Optional[str] = None\n    activity: List[Activity]\n@router.post(\"/google-drive/save-campaign\")",
+        "detail": "server.google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "BatchCalendarRequest",
+        "kind": 6,
+        "importPath": "server.google_complete",
+        "description": "server.google_complete",
+        "peekOfCode": "class BatchCalendarRequest(BaseModel):\n    campaigns: List[Campaign]\n@router.post(\"/google-calendar/create-batch-events\")\nasync def create_batch_calendar_events(request: BatchCalendarRequest, calendar_service = Depends(lambda: get_google_service('calendar', 'v3'))):\n    print(f\"Creating batch calendar events for {len(request.campaigns)} campaigns...\")\n    if not request.campaigns:\n        raise HTTPException(\n            status_code=status.HTTP_400_BAD_REQUEST,\n            detail=\"No campaigns provided for batch event creation.\"\n        )",
+        "detail": "server.google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "get_google_flow",
+        "kind": 2,
+        "importPath": "server.google_complete",
+        "description": "server.google_complete",
+        "peekOfCode": "def get_google_flow():\n    if not os.path.exists('Credentials.json'):\n        print(\"Credentials.json not found!\")\n        raise HTTPException(\n            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,\n            detail=\"Credentials.json not found. Please create it with your Google Cloud credentials.\"\n        )\n    flow = Flow.from_client_secrets_file(\n        'Credentials.json',\n        scopes=SCOPES,",
+        "detail": "server.google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "get_google_service",
+        "kind": 2,
+        "importPath": "server.google_complete",
+        "description": "server.google_complete",
+        "peekOfCode": "def get_google_service(service_name: str, version: str):\n    creds = None\n    if os.path.exists(TOKEN_FILE):\n        # Enhanced token file corruption handling\n        try:\n            # Check if TOKEN_FILE is a directory instead of a file\n            if os.path.isdir(TOKEN_FILE):\n                print(f\"Warning: {TOKEN_FILE} is a directory, not a file. Attempting to remove it.\")\n                import shutil\n                try:",
+        "detail": "server.google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "router",
+        "kind": 5,
+        "importPath": "server.google_complete",
+        "description": "server.google_complete",
+        "peekOfCode": "router = APIRouter()\n# This is the file that will store the user's access and refresh tokens.\n# It is created automatically when the authorization flow completes for the first\n# time.\nTOKEN_FILE = 'token.json'\nSCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly', \n          'https://www.googleapis.com/auth/drive', \n          'https://www.googleapis.com/auth/analytics.readonly', \n          'https://mail.google.com/',\n          'https://www.googleapis.com/auth/calendar']",
+        "detail": "server.google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "TOKEN_FILE",
+        "kind": 5,
+        "importPath": "server.google_complete",
+        "description": "server.google_complete",
+        "peekOfCode": "TOKEN_FILE = 'token.json'\nSCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly', \n          'https://www.googleapis.com/auth/drive', \n          'https://www.googleapis.com/auth/analytics.readonly', \n          'https://mail.google.com/',\n          'https://www.googleapis.com/auth/calendar']\ndef get_google_flow():\n    if not os.path.exists('Credentials.json'):\n        print(\"Credentials.json not found!\")\n        raise HTTPException(",
+        "detail": "server.google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "SCOPES",
+        "kind": 5,
+        "importPath": "server.google_complete",
+        "description": "server.google_complete",
+        "peekOfCode": "SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly', \n          'https://www.googleapis.com/auth/drive', \n          'https://www.googleapis.com/auth/analytics.readonly', \n          'https://mail.google.com/',\n          'https://www.googleapis.com/auth/calendar']\ndef get_google_flow():\n    if not os.path.exists('Credentials.json'):\n        print(\"Credentials.json not found!\")\n        raise HTTPException(\n            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,",
+        "detail": "server.google_complete",
+        "documentation": {}
+    },
+    {
+        "label": "convert_url_to_local_path",
+        "kind": 2,
+        "importPath": "server.image_path_utils",
+        "description": "server.image_path_utils",
+        "peekOfCode": "def convert_url_to_local_path(image_path: Optional[str]) -> Optional[str]:\n    \"\"\"\n    Convert various image URL formats to local file paths\n    Handles:\n    - /public/filename.jpg -> public/filename.jpg\n    - public/filename.jpg -> public/filename.jpg (no change)\n    - http://localhost:8000/public/filename.jpg -> public/filename.jpg\n    - http://localhost:5173/public/filename.jpg -> public/filename.jpg\n    - http://localhost:XXXX/public/filename.jpg -> public/filename.jpg\n    - filename.jpg -> public/filename.jpg (assume public folder)",
+        "detail": "server.image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "validate_local_image_path",
+        "kind": 2,
+        "importPath": "server.image_path_utils",
+        "description": "server.image_path_utils",
+        "peekOfCode": "def validate_local_image_path(image_path: Optional[str]) -> bool:\n    \"\"\"\n    Validate that a local image path exists and is readable\n    Args:\n        image_path: Local file path to validate\n    Returns:\n        True if file exists and is readable, False otherwise\n    \"\"\"\n    if not image_path:\n        return False",
+        "detail": "server.image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "get_image_info",
+        "kind": 2,
+        "importPath": "server.image_path_utils",
+        "description": "server.image_path_utils",
+        "peekOfCode": "def get_image_info(image_path: Optional[str]) -> dict:\n    \"\"\"\n    Get information about an image file\n    Args:\n        image_path: Local file path to analyze\n    Returns:\n        Dictionary with image info (exists, size, readable, etc.)\n    \"\"\"\n    info = {\n        \"path\": image_path,",
+        "detail": "server.image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_facebook",
+        "kind": 2,
+        "importPath": "server.image_path_utils",
+        "description": "server.image_path_utils",
+        "peekOfCode": "def convert_image_path_for_facebook(image_path: Optional[str]) -> Optional[str]:\n    \"\"\"Convert image path for Facebook posting\"\"\"\n    return convert_url_to_local_path(image_path)\ndef convert_image_path_for_twitter(image_path: Optional[str]) -> Optional[str]:\n    \"\"\"Convert image path for Twitter posting\"\"\"\n    return convert_url_to_local_path(image_path)\ndef convert_image_path_for_reddit(image_path: Optional[str]) -> Optional[str]:\n    \"\"\"Convert image path for Reddit posting\"\"\"\n    return convert_url_to_local_path(image_path)",
+        "detail": "server.image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_twitter",
+        "kind": 2,
+        "importPath": "server.image_path_utils",
+        "description": "server.image_path_utils",
+        "peekOfCode": "def convert_image_path_for_twitter(image_path: Optional[str]) -> Optional[str]:\n    \"\"\"Convert image path for Twitter posting\"\"\"\n    return convert_url_to_local_path(image_path)\ndef convert_image_path_for_reddit(image_path: Optional[str]) -> Optional[str]:\n    \"\"\"Convert image path for Reddit posting\"\"\"\n    return convert_url_to_local_path(image_path)",
+        "detail": "server.image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "convert_image_path_for_reddit",
+        "kind": 2,
+        "importPath": "server.image_path_utils",
+        "description": "server.image_path_utils",
+        "peekOfCode": "def convert_image_path_for_reddit(image_path: Optional[str]) -> Optional[str]:\n    \"\"\"Convert image path for Reddit posting\"\"\"\n    return convert_url_to_local_path(image_path)",
+        "detail": "server.image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "logger",
+        "kind": 5,
+        "importPath": "server.image_path_utils",
+        "description": "server.image_path_utils",
+        "peekOfCode": "logger = logging.getLogger(__name__)\ndef convert_url_to_local_path(image_path: Optional[str]) -> Optional[str]:\n    \"\"\"\n    Convert various image URL formats to local file paths\n    Handles:\n    - /public/filename.jpg -> public/filename.jpg\n    - public/filename.jpg -> public/filename.jpg (no change)\n    - http://localhost:8000/public/filename.jpg -> public/filename.jpg\n    - http://localhost:5173/public/filename.jpg -> public/filename.jpg\n    - http://localhost:XXXX/public/filename.jpg -> public/filename.jpg",
+        "detail": "server.image_path_utils",
+        "documentation": {}
+    },
+    {
+        "label": "PostRequest",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class PostRequest(BaseModel):\n    description: str\n    caption_provider: Optional[str] = \"groq\"  # chatgpt, groq\n    image_provider: Optional[str] = \"stability\"  # stability, chatgpt, nano_banana\n    platforms: Optional[List[str]] = [\"instagram\"]  # Array of platforms: instagram, facebook, twitter, reddit\n    subreddit: Optional[str] = None  # For Reddit posts\nclass PostResponse(BaseModel):\n    success: bool\n    caption: Optional[str] = None\n    image_path: Optional[str] = None",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "PostResponse",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class PostResponse(BaseModel):\n    success: bool\n    caption: Optional[str] = None\n    image_path: Optional[str] = None\n    error: Optional[str] = None\nclass BatchRequest(BaseModel):\n    description: str\n    days: int\n    num_posts: int\n    caption_provider: Optional[str] = \"groq\"  # chatgpt, groq",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "BatchRequest",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class BatchRequest(BaseModel):\n    description: str\n    days: int\n    num_posts: int\n    caption_provider: Optional[str] = \"groq\"  # chatgpt, groq\n    image_provider: Optional[str] = \"stability\"  # stability, chatgpt, nano_banana\n    platforms: Optional[List[str]] = [\"instagram\"]  # Array of platforms: instagram, facebook, twitter, reddit\n    subreddit: Optional[str] = None  # For Reddit posts\n    campaign_name: Optional[str] = None  # Campaign name for the batch\nclass BatchItem(BaseModel):",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "BatchItem",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class BatchItem(BaseModel):\n    caption: Optional[str] = None\n    image_path: Optional[str] = None\n    scheduled_at: Optional[str] = None\n    error: Optional[str] = None\nclass BatchResponse(BaseModel):\n    success: bool\n    items: List[BatchItem]\n    error: Optional[str] = None\n    batch_id: Optional[str] = None",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "BatchResponse",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class BatchResponse(BaseModel):\n    success: bool\n    items: List[BatchItem]\n    error: Optional[str] = None\n    batch_id: Optional[str] = None\ndef generate_caption_with_groq(description: str) -> str:\n    \"\"\"Generate Instagram caption using Groq API\"\"\"\n    try:\n        if not GROQ_API_KEY:\n            raise Exception(\"Groq API key not found\")",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "ScheduleBatchRequest",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class ScheduleBatchRequest(BaseModel):\n    platforms: List[str]\n    days: int\nclass GenerateScheduleRequest(BaseModel):\n    num_posts: int\n    days: int\n@app.post(\"/api/generate-schedule\")\nasync def generate_schedule_dates(request: GenerateScheduleRequest):\n    \"\"\"Generate optimal schedule dates for posts without requiring a batch\"\"\"\n    try:",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "GenerateScheduleRequest",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class GenerateScheduleRequest(BaseModel):\n    num_posts: int\n    days: int\n@app.post(\"/api/generate-schedule\")\nasync def generate_schedule_dates(request: GenerateScheduleRequest):\n    \"\"\"Generate optimal schedule dates for posts without requiring a batch\"\"\"\n    try:\n        if request.num_posts <= 0:\n            raise HTTPException(status_code=400, detail=\"num_posts must be positive\")\n        if request.days <= 0:",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarEventRequest",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class CalendarEventRequest(BaseModel):\n    title: str\n    description: Optional[str] = None\n    start_time: str  # ISO format datetime\n    end_time: Optional[str] = None  # ISO format datetime\n    all_day: bool = False\n    location: Optional[str] = None\n    color: str = \"#3174ad\"\n    reminder_minutes: int = 15\n    post_id: Optional[str] = None",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarEventUpdateRequest",
+        "kind": 6,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "class CalendarEventUpdateRequest(BaseModel):\n    title: Optional[str] = None\n    description: Optional[str] = None\n    start_time: Optional[str] = None\n    end_time: Optional[str] = None\n    all_day: Optional[bool] = None\n    location: Optional[str] = None\n    color: Optional[str] = None\n    reminder_minutes: Optional[int] = None\n    status: Optional[str] = None",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "generate_caption_with_groq",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def generate_caption_with_groq(description: str) -> str:\n    \"\"\"Generate Instagram caption using Groq API\"\"\"\n    try:\n        if not GROQ_API_KEY:\n            raise Exception(\"Groq API key not found\")\n        headers = {\n            \"Authorization\": f\"Bearer {GROQ_API_KEY}\",\n            \"Content-Type\": \"application/json\",\n        }\n        data = {",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "generate_caption_with_chatgpt",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def generate_caption_with_chatgpt(description: str) -> str:\n    \"\"\"Generate Instagram caption using ChatGPT API\"\"\"\n    try:\n        if not CHATGPT_API_KEY:\n            print(\"ChatGPT API key not found, using fallback caption\")\n            raise Exception(\"ChatGPT API key not found\")\n        headers = {\n            \"Authorization\": f\"Bearer {CHATGPT_API_KEY}\",\n            \"Content-Type\": \"application/json\",\n        }",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "generate_caption",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def generate_caption(description: str, provider: str = \"groq\") -> str:\n    \"\"\"Generate caption using specified provider\"\"\"\n    if provider == \"groq\":\n        return generate_caption_with_groq(description)\n    elif provider == \"chatgpt\":\n        return generate_caption_with_chatgpt(description)\n    else:\n        # Default to Groq\n        return generate_caption_with_groq(description)\ndef create_placeholder_image(description: str) -> Optional[str]:",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "create_placeholder_image",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def create_placeholder_image(description: str) -> Optional[str]:\n    \"\"\"Create a placeholder image with the description text when AI generation fails.\"\"\"\n    try:\n        # Create a 1024x1024 image\n        img = Image.new('RGB', (1024, 1024), color=(70, 130, 180))  # Steel blue background\n        draw = ImageDraw.Draw(img)\n        # Try to load a font, fallback to default\n        try:\n            # Try different font paths for different systems\n            font_paths = [",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "generate_image_with_stability",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def generate_image_with_stability(description: str) -> Optional[str]:\n    \"\"\"Generate image using Stability AI API and store it in public/ with retries.\n    Falls back to placeholder image if service is unavailable.\n    Tuned prompts to stay faithful to the user description.\n    \"\"\"\n    try:\n        if not STABILITY_API_KEY:\n            print(\"Stability API key not found, creating placeholder image...\")\n            return create_placeholder_image(description)\n        # SDXL allowed dimensions include 1024x1024; stick to it to avoid 400s",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "generate_image_with_chatgpt",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def generate_image_with_chatgpt(description: str) -> Optional[str]:\n    \"\"\"Generate image using ChatGPT DALL-E API and store it in public/.\n    Falls back to placeholder image if service is unavailable.\n    \"\"\"\n    try:\n        if not CHATGPT_API_KEY:\n            print(\"ChatGPT API key not found, creating placeholder image...\")\n            return create_placeholder_image(description)\n        headers = {\n            \"Authorization\": f\"Bearer {CHATGPT_API_KEY}\",",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "generate_image_with_nano_banana",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def generate_image_with_nano_banana(description: str) -> Optional[str]:\n    \"\"\"Generate image using Nano Banana (Google Gemini 2.5 Flash Image Preview) API.\n    Falls back to placeholder image if service is unavailable.\n    \"\"\"\n    try:\n        if not NANO_BANANA_API_KEY:\n            print(\"Nano Banana (Google Gemini) API key not found, creating placeholder image...\")\n            return create_placeholder_image(description)\n        import google.generativeai as genai\n        # Configure Gemini API",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "generate_image",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def generate_image(description: str, provider: str = \"stability\") -> Optional[str]:\n    \"\"\"Generate image using specified provider\"\"\"\n    if provider == \"stability\":\n        return generate_image_with_stability(description)\n    elif provider == \"chatgpt\":\n        return generate_image_with_chatgpt(description)\n    elif provider == \"nano_banana\":\n        return generate_image_with_nano_banana(description)\n    else:\n        # Default to Stability",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "get_calendar_service",
+        "kind": 2,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "def get_calendar_service():\n    \"\"\"Get calendar service with sync database session\"\"\"\n    from database import get_sync_db\n    db = next(get_sync_db())\n    try:\n        return CalendarService(db)\n    finally:\n        db.close()\n@app.get(\"/api/calendar/events\")\nasync def get_calendar_events(",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "app",
+        "kind": 5,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "app = FastAPI(\n    title=\"Instagram Post Generator API\",\n    description=\"Generate Instagram posts with AI\",\n    version=\"3.0.0\",\n    lifespan=lifespan\n)\n# CORS middleware\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"*\"],",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "GROQ_API_KEY",
+        "kind": 5,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "GROQ_API_KEY = os.getenv(\"GROQ_API_KEY\")\nSTABILITY_API_KEY = os.getenv(\"STABILITY_API_KEY\")  # For image generation\nCHATGPT_API_KEY = os.getenv(\"CHATGPT_API\")  # For caption and image generation\nNANO_BANANA_API_KEY = os.getenv(\"NANO_BANANA_API_KEY\")  # For image generation\nclass PostRequest(BaseModel):\n    description: str\n    caption_provider: Optional[str] = \"groq\"  # chatgpt, groq\n    image_provider: Optional[str] = \"stability\"  # stability, chatgpt, nano_banana\n    platforms: Optional[List[str]] = [\"instagram\"]  # Array of platforms: instagram, facebook, twitter, reddit\n    subreddit: Optional[str] = None  # For Reddit posts",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "STABILITY_API_KEY",
+        "kind": 5,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "STABILITY_API_KEY = os.getenv(\"STABILITY_API_KEY\")  # For image generation\nCHATGPT_API_KEY = os.getenv(\"CHATGPT_API\")  # For caption and image generation\nNANO_BANANA_API_KEY = os.getenv(\"NANO_BANANA_API_KEY\")  # For image generation\nclass PostRequest(BaseModel):\n    description: str\n    caption_provider: Optional[str] = \"groq\"  # chatgpt, groq\n    image_provider: Optional[str] = \"stability\"  # stability, chatgpt, nano_banana\n    platforms: Optional[List[str]] = [\"instagram\"]  # Array of platforms: instagram, facebook, twitter, reddit\n    subreddit: Optional[str] = None  # For Reddit posts\nclass PostResponse(BaseModel):",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "CHATGPT_API_KEY",
+        "kind": 5,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "CHATGPT_API_KEY = os.getenv(\"CHATGPT_API\")  # For caption and image generation\nNANO_BANANA_API_KEY = os.getenv(\"NANO_BANANA_API_KEY\")  # For image generation\nclass PostRequest(BaseModel):\n    description: str\n    caption_provider: Optional[str] = \"groq\"  # chatgpt, groq\n    image_provider: Optional[str] = \"stability\"  # stability, chatgpt, nano_banana\n    platforms: Optional[List[str]] = [\"instagram\"]  # Array of platforms: instagram, facebook, twitter, reddit\n    subreddit: Optional[str] = None  # For Reddit posts\nclass PostResponse(BaseModel):\n    success: bool",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "NANO_BANANA_API_KEY",
+        "kind": 5,
+        "importPath": "server.main",
+        "description": "server.main",
+        "peekOfCode": "NANO_BANANA_API_KEY = os.getenv(\"NANO_BANANA_API_KEY\")  # For image generation\nclass PostRequest(BaseModel):\n    description: str\n    caption_provider: Optional[str] = \"groq\"  # chatgpt, groq\n    image_provider: Optional[str] = \"stability\"  # stability, chatgpt, nano_banana\n    platforms: Optional[List[str]] = [\"instagram\"]  # Array of platforms: instagram, facebook, twitter, reddit\n    subreddit: Optional[str] = None  # For Reddit posts\nclass PostResponse(BaseModel):\n    success: bool\n    caption: Optional[str] = None",
+        "detail": "server.main",
+        "documentation": {}
+    },
+    {
+        "label": "Campaign",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class Campaign(Base):\n    \"\"\"Campaign model for grouping related posts\"\"\"\n    __tablename__ = \"campaigns\"\n    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)\n    name = Column(String(255), nullable=False)\n    description = Column(Text)\n    created_at = Column(DateTime(timezone=True), server_default=func.now())\n    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())\n    is_active = Column(Boolean, default=True)\n    # Relationships",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "Post",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class Post(Base):\n    \"\"\"Main post model for storing social media posts\"\"\"\n    __tablename__ = \"posts\"\n    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)\n    campaign_id = Column(UUID(as_uuid=True), ForeignKey(\"campaigns.id\"), nullable=True)\n    original_description = Column(Text, nullable=False)\n    caption = Column(Text)\n    image_path = Column(String(500))\n    image_url = Column(String(500))\n    scheduled_at = Column(DateTime(timezone=True))",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "Image",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class Image(Base):\n    \"\"\"Image model for storing detailed image information\"\"\"\n    __tablename__ = \"images\"\n    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)\n    post_id = Column(UUID(as_uuid=True), ForeignKey(\"posts.id\"), nullable=False)\n    file_path = Column(String(500), nullable=False)\n    file_name = Column(String(255), nullable=False)\n    file_size = Column(Integer)\n    image_width = Column(Integer)\n    image_height = Column(Integer)",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "Caption",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class Caption(Base):\n    \"\"\"Caption model for storing caption variations and history\"\"\"\n    __tablename__ = \"captions\"\n    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)\n    post_id = Column(UUID(as_uuid=True), ForeignKey(\"posts.id\"), nullable=False)\n    content = Column(Text, nullable=False)\n    generation_method = Column(String(100))  # groq, manual, user_input\n    generation_prompt = Column(Text)\n    language = Column(String(10), default=\"en\")\n    hashtags = Column(ARRAY(String))  # Array of hashtags",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "PostingSchedule",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class PostingSchedule(Base):\n    \"\"\"Posting schedule model for advanced scheduling features\"\"\"\n    __tablename__ = \"posting_schedules\"\n    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)\n    post_id = Column(UUID(as_uuid=True), ForeignKey(\"posts.id\"), nullable=False)\n    scheduled_at = Column(DateTime(timezone=True), nullable=False)\n    time_zone = Column(String(50), default=\"UTC\")\n    recurring_pattern = Column(String(100))  # daily, weekly, monthly, etc.\n    recurring_end_date = Column(DateTime(timezone=True))\n    priority = Column(Integer, default=1)  # 1=high, 2=medium, 3=low",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "BatchOperation",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class BatchOperation(Base):\n    \"\"\"Batch operation model for tracking bulk generation requests\"\"\"\n    __tablename__ = \"batch_operations\"\n    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)\n    description = Column(Text, nullable=False)\n    num_posts = Column(Integer, nullable=False)\n    days_duration = Column(Integer, nullable=False)\n    status = Column(String(50), default=\"in_progress\")  # in_progress, completed, failed, cancelled\n    posts_generated = Column(Integer, default=0)\n    posts_failed = Column(Integer, default=0)",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarEvent",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class CalendarEvent(Base):\n    \"\"\"Calendar event model for storing scheduled campaign events\"\"\"\n    __tablename__ = \"calendar_events\"\n    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)\n    post_id = Column(UUID(as_uuid=True), ForeignKey(\"posts.id\"), nullable=True)\n    title = Column(String(255), nullable=False)\n    description = Column(Text)\n    start_time = Column(DateTime(timezone=True), nullable=False)\n    end_time = Column(DateTime(timezone=True), nullable=False)\n    all_day = Column(Boolean, default=False)",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "CampaignResponse",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class CampaignResponse(BaseModel):\n    id: str\n    name: str\n    description: Optional[str] = None\n    is_active: bool\n    created_at: datetime\n    updated_at: datetime\n    class Config:\n        from_attributes = True\nclass ImageResponse(BaseModel):",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "ImageResponse",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class ImageResponse(BaseModel):\n    id: str\n    file_path: str\n    file_name: str\n    file_size: Optional[int] = None\n    image_width: Optional[int] = None\n    image_height: Optional[int] = None\n    mime_type: Optional[str] = None\n    generation_method: Optional[str] = None\n    generation_prompt: Optional[str] = None",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "CaptionResponse",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class CaptionResponse(BaseModel):\n    id: str\n    content: str\n    generation_method: Optional[str] = None\n    generation_prompt: Optional[str] = None\n    language: str\n    hashtags: Optional[List[str]] = None\n    word_count: Optional[int] = None\n    is_active: bool\n    created_at: datetime",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "PostingScheduleResponse",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class PostingScheduleResponse(BaseModel):\n    id: str\n    scheduled_at: datetime\n    time_zone: str\n    recurring_pattern: Optional[str] = None\n    recurring_end_date: Optional[datetime] = None\n    priority: int\n    auto_post: bool\n    posted_at: Optional[datetime] = None\n    status: str",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "PostResponse",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class PostResponse(BaseModel):\n    id: str\n    campaign_id: Optional[str] = None\n    original_description: str\n    caption: Optional[str] = None\n    image_path: Optional[str] = None\n    image_url: Optional[str] = None\n    scheduled_at: Optional[datetime] = None\n    posted_at: Optional[datetime] = None\n    status: str",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "BatchOperationResponse",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class BatchOperationResponse(BaseModel):\n    id: str\n    description: str\n    num_posts: int\n    days_duration: int\n    status: str\n    posts_generated: int\n    posts_failed: int\n    error_messages: Optional[List[str]] = None\n    started_at: datetime",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "CalendarEventResponse",
+        "kind": 6,
+        "importPath": "server.models",
+        "description": "server.models",
+        "peekOfCode": "class CalendarEventResponse(BaseModel):\n    id: str\n    post_id: Optional[str] = None\n    title: str\n    description: Optional[str] = None\n    start_time: datetime\n    end_time: datetime\n    all_day: bool\n    location: Optional[str] = None\n    color: str",
+        "detail": "server.models",
+        "documentation": {}
+    },
+    {
+        "label": "SchedulerService",
+        "kind": 6,
+        "importPath": "server.scheduler_service",
+        "description": "server.scheduler_service",
+        "peekOfCode": "class SchedulerService:\n    \"\"\"Background service for scheduling and publishing posts\"\"\"\n    def __init__(self):\n        self.is_running = False\n        self.poll_interval = 60  # Check every 60 seconds\n        self.task = None\n    async def start(self):\n        \"\"\"Start the background scheduler\"\"\"\n        if self.is_running:\n            logger.info(\"Scheduler is already running\")",
+        "detail": "server.scheduler_service",
+        "documentation": {}
+    },
+    {
+        "label": "logger",
+        "kind": 5,
+        "importPath": "server.scheduler_service",
+        "description": "server.scheduler_service",
+        "peekOfCode": "logger = logging.getLogger(__name__)\nclass SchedulerService:\n    \"\"\"Background service for scheduling and publishing posts\"\"\"\n    def __init__(self):\n        self.is_running = False\n        self.poll_interval = 60  # Check every 60 seconds\n        self.task = None\n    async def start(self):\n        \"\"\"Start the background scheduler\"\"\"\n        if self.is_running:",
+        "detail": "server.scheduler_service",
+        "documentation": {}
+    },
+    {
+        "label": "scheduler_service",
+        "kind": 5,
+        "importPath": "server.scheduler_service",
+        "description": "server.scheduler_service",
+        "peekOfCode": "scheduler_service = SchedulerService()\nasync def start_scheduler():\n    \"\"\"Start the global scheduler service\"\"\"\n    await scheduler_service.start()\nasync def stop_scheduler():\n    \"\"\"Stop the global scheduler service\"\"\"\n    await scheduler_service.stop()",
+        "detail": "server.scheduler_service",
+        "documentation": {}
+    },
+    {
+        "label": "PlatformCredentials",
+        "kind": 6,
+        "importPath": "server.social_media_routes",
+        "description": "server.social_media_routes",
+        "peekOfCode": "class PlatformCredentials(BaseModel):\n    \"\"\"Model for platform credentials\"\"\"\n    credentials: Dict[str, str]\n    class Config:\n        # Allow extra fields for flexibility\n        extra = \"allow\"\nclass ConnectionResponse(BaseModel):\n    success: bool\n    connected: bool\n    message: str",
+        "detail": "server.social_media_routes",
+        "documentation": {}
+    },
+    {
+        "label": "ConnectionResponse",
+        "kind": 6,
+        "importPath": "server.social_media_routes",
+        "description": "server.social_media_routes",
+        "peekOfCode": "class ConnectionResponse(BaseModel):\n    success: bool\n    connected: bool\n    message: str\n    error: Optional[str] = None\nclass StatusResponse(BaseModel):\n    connected: bool\n    has_credentials: bool\n    platform: str\n    last_checked: str",
+        "detail": "server.social_media_routes",
+        "documentation": {}
+    },
+    {
+        "label": "StatusResponse",
+        "kind": 6,
+        "importPath": "server.social_media_routes",
+        "description": "server.social_media_routes",
+        "peekOfCode": "class StatusResponse(BaseModel):\n    connected: bool\n    has_credentials: bool\n    platform: str\n    last_checked: str\n    details: Optional[Dict[str, Any]] = None\n# Platform connection testers\nasync def test_facebook_connection() -> Dict[str, Any]:\n    \"\"\"Test Facebook connection using existing credentials\"\"\"\n    try:",
+        "detail": "server.social_media_routes",
+        "documentation": {}
+    },
+    {
+        "label": "router",
+        "kind": 5,
+        "importPath": "server.social_media_routes",
+        "description": "server.social_media_routes",
+        "peekOfCode": "router = APIRouter(prefix=\"/social-media\", tags=[\"social-media\"])\nclass PlatformCredentials(BaseModel):\n    \"\"\"Model for platform credentials\"\"\"\n    credentials: Dict[str, str]\n    class Config:\n        # Allow extra fields for flexibility\n        extra = \"allow\"\nclass ConnectionResponse(BaseModel):\n    success: bool\n    connected: bool",
+        "detail": "server.social_media_routes",
+        "documentation": {}
+    },
+    {
+        "label": "test_image_path_conversion",
+        "kind": 2,
+        "importPath": "server.test_image_path_fixes",
+        "description": "server.test_image_path_fixes",
+        "peekOfCode": "def test_image_path_conversion():\n    \"\"\"Test various image path conversion scenarios\"\"\"\n    print(\"Testing Image Path Conversion...\")\n    print(\"=\" * 50)\n    test_cases = [\n        # (input_path, expected_output, description)\n        (\"/public/image.jpg\", \"public/image.jpg\", \"Leading slash removal\"),\n        (\"public/image.jpg\", \"public/image.jpg\", \"Already correct format\"),\n        (\"http://localhost:8000/public/image.jpg\", \"public/image.jpg\", \"Full localhost URL\"),\n        (\"http://localhost:5173/public/image.jpg\", \"public/image.jpg\", \"Different port localhost URL\"),",
+        "detail": "server.test_image_path_fixes",
+        "documentation": {}
+    },
+    {
+        "label": "test_platform_consistency",
+        "kind": 2,
+        "importPath": "server.test_image_path_fixes",
+        "description": "server.test_image_path_fixes",
+        "peekOfCode": "def test_platform_consistency():\n    \"\"\"Test that all platforms use the same conversion logic\"\"\"\n    print(\"Testing Platform Consistency...\")\n    print(\"=\" * 50)\n    test_urls = [\n        \"/public/test.jpg\",\n        \"http://localhost:8000/public/test.jpg\",\n        \"public/test.jpg\"\n    ]\n    all_consistent = True",
+        "detail": "server.test_image_path_fixes",
+        "documentation": {}
+    },
+    {
+        "label": "test_file_validation",
+        "kind": 2,
+        "importPath": "server.test_image_path_fixes",
+        "description": "server.test_image_path_fixes",
+        "peekOfCode": "def test_file_validation():\n    \"\"\"Test file validation functions\"\"\"\n    print(\"Testing File Validation...\")\n    print(\"=\" * 50)\n    # Create a temporary test file\n    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:\n        temp_file.write(\"Test image content\")\n        temp_file_path = temp_file.name\n    try:\n        # Test existing file",
+        "detail": "server.test_image_path_fixes",
+        "documentation": {}
+    },
+    {
+        "label": "test_scheduler_fix_simulation",
+        "kind": 2,
+        "importPath": "server.test_image_path_fixes",
+        "description": "server.test_image_path_fixes",
+        "peekOfCode": "def test_scheduler_fix_simulation():\n    \"\"\"Simulate the scheduler fix scenarios\"\"\"\n    print(\"Testing Scheduler Fix Simulation...\")\n    print(\"=\" * 50)\n    # Simulate the problematic URLs that were causing Facebook failures\n    problematic_urls = [\n        \"public/http://localhost:8000/public/generated_12345678_1234567890.png\",\n        \"/public/http://localhost:8000/public/placeholder_abcd1234_9876543210.png\",\n        \"http://localhost:8000/public/custom_image_20240101_12345678.jpg\"\n    ]",
+        "detail": "server.test_image_path_fixes",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "server.test_image_path_fixes",
+        "description": "server.test_image_path_fixes",
+        "peekOfCode": "def main():\n    \"\"\"Run all tests\"\"\"\n    print(\"Social Media Agent - Image Path Fix Validation\")\n    print(\"=\" * 60)\n    print()\n    tests = [\n        (\"Path Conversion\", test_image_path_conversion),\n        (\"Platform Consistency\", test_platform_consistency),\n        (\"File Validation\", test_file_validation),\n        (\"Scheduler Fix Simulation\", test_scheduler_fix_simulation),",
+        "detail": "server.test_image_path_fixes",
+        "documentation": {}
+    },
+    {
+        "label": "TrendingTopicsService",
+        "kind": 6,
+        "importPath": "server.trending_topics_service",
+        "description": "server.trending_topics_service",
+        "peekOfCode": "class TrendingTopicsService:\n    \"\"\"Service for generating AI-powered trending topics\"\"\"\n    def __init__(self):\n        self.groq_api_key = os.getenv(\"GROQ_API_KEY\")\n        self.cache_file = \"trending_topics_cache.json\"\n        self.cache_duration_hours = 4\n        self.categories = {\n            \"all\": \"All\",\n            \"technology\": \"Technology\",\n            \"business\": \"Business\", ",
+        "detail": "server.trending_topics_service",
+        "documentation": {}
+    },
+    {
+        "label": "logger",
+        "kind": 5,
+        "importPath": "server.trending_topics_service",
+        "description": "server.trending_topics_service",
+        "peekOfCode": "logger = logging.getLogger(__name__)\nclass TrendingTopicsService:\n    \"\"\"Service for generating AI-powered trending topics\"\"\"\n    def __init__(self):\n        self.groq_api_key = os.getenv(\"GROQ_API_KEY\")\n        self.cache_file = \"trending_topics_cache.json\"\n        self.cache_duration_hours = 4\n        self.categories = {\n            \"all\": \"All\",\n            \"technology\": \"Technology\",",
+        "detail": "server.trending_topics_service",
+        "documentation": {}
+    },
+    {
+        "label": "trending_service",
+        "kind": 5,
+        "importPath": "server.trending_topics_service",
+        "description": "server.trending_topics_service",
+        "peekOfCode": "trending_service = TrendingTopicsService()",
+        "detail": "server.trending_topics_service",
+        "documentation": {}
+    },
+    {
+        "label": "test_scheduling",
+        "kind": 2,
+        "importPath": "test_scheduling",
+        "description": "test_scheduling",
+        "peekOfCode": "def test_scheduling():\n    print(\"🧪 Testing Schedule Distribution Logic\\n\")\n    # Test Case 1: 2 posts over 1 day (your reported problem)\n    print(\"📋 Test Case 1: 2 posts, 1 day\")\n    dates1 = _compute_schedule_dates(2, 1)\n    for i, date in enumerate(dates1):\n        print(f\"   Post {i + 1}: {datetime.fromisoformat(date).strftime('%Y-%m-%d %H:%M:%S')}\")\n    print()\n    # Test Case 2: 3 posts over 2 days\n    print(\"📋 Test Case 2: 3 posts, 2 days\") ",
+        "detail": "test_scheduling",
+        "documentation": {}
+    }
+]
