@@ -1,0 +1,434 @@
+import Card from "../components/ui/Card.jsx";
+import Button from "../components/ui/Button.jsx";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
+import { apiFetch, apiUrl } from "../lib/api.js";
+import SocialMediaConnectionModal from "../components/ui/SocialMediaConnectionModal.jsx";
+import { Facebook, Twitter, MessageCircle } from "lucide-react";
+
+function Settings() {
+  const [driveConnected, setDriveConnected] = useState(false);
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [notifications, setNotifications] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+  
+  // Social media connection states
+  const [socialMediaModal, setSocialMediaModal] = useState({ open: false, platform: null });
+  const [platformStatus, setPlatformStatus] = useState({
+    facebook: { connected: false, checking: false },
+    twitter: { connected: false, checking: false },
+    reddit: { connected: false, checking: false }
+  });
+
+  // Check Google Drive connection status on page load
+  useEffect(() => {
+    checkGoogleStatus();
+    checkAllSocialMediaStatus();
+  }, []);
+
+  const checkGoogleStatus = async () => {
+    try {
+      setCheckingStatus(true);
+      const response = await apiFetch("/google/status");
+      const data = await response.json();
+      setDriveConnected(data.connected);
+      setCalendarConnected(data.connected); // Same OAuth token works for both
+    } catch (error) {
+      console.error("Failed to check Google status:", error);
+      setDriveConnected(false);
+      setCalendarConnected(false);
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
+
+  const connectToGoogle = async () => {
+    try {
+      setLoading(true);
+      // Open Google OAuth in a new window
+      const authWindow = window.open(
+        apiUrl("/google/connect"),
+        "GoogleAuth",
+        "width=500,height=600,scrollbars=yes,resizable=yes"
+      );
+
+      // Poll for connection status
+      const pollInterval = setInterval(async () => {
+        if (authWindow.closed) {
+          clearInterval(pollInterval);
+          await checkGoogleStatus();
+          if (driveConnected) {
+            toast.success("Successfully connected to Google Drive!");
+          }
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const statusResponse = await apiFetch("/google/status");
+          const statusData = await statusResponse.json();
+          if (statusData.connected) {
+            setDriveConnected(true);
+            clearInterval(pollInterval);
+            authWindow.close();
+            toast.success("Successfully connected to Google Drive!");
+            setLoading(false);
+          }
+        } catch (error) {
+          // Continue polling
+        }
+      }, 2000);
+
+      // Stop polling after 60 seconds
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (!authWindow.closed) {
+          authWindow.close();
+        }
+        setLoading(false);
+      }, 60000);
+    } catch (error) {
+      console.error("Failed to connect to Google:", error);
+      toast.error("Failed to connect to Google Drive");
+      setLoading(false);
+    }
+  };
+
+  const disconnectGoogle = async () => {
+    // For now, we'll just update the UI. In a real app, you'd call an endpoint to revoke tokens
+    try {
+      setLoading(true);
+      // You would typically call an endpoint to revoke the token here
+      // await apiFetch("/google/disconnect", { method: "POST" });
+
+      setDriveConnected(false);
+      toast.success("Disconnected from Google Drive");
+    } catch (error) {
+      toast.error("Failed to disconnect from Google Drive");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Social media platform management functions
+  const checkAllSocialMediaStatus = async () => {
+    const platforms = ['facebook', 'twitter', 'reddit'];
+    
+    for (const platform of platforms) {
+      setPlatformStatus(prev => ({ ...prev, [platform]: { ...prev[platform], checking: true } }));
+      
+      try {
+        const response = await apiFetch(`/social-media/${platform}/status`);
+        const data = await response.json();
+        setPlatformStatus(prev => ({ 
+          ...prev, 
+          [platform]: { connected: data.connected, checking: false } 
+        }));
+      } catch (error) {
+        console.error(`Failed to check ${platform} status:`, error);
+        setPlatformStatus(prev => ({ 
+          ...prev, 
+          [platform]: { connected: false, checking: false } 
+        }));
+      }
+    }
+  };
+
+  const handleSocialMediaConnect = (platform) => {
+    setSocialMediaModal({ open: true, platform });
+  };
+
+  const handleSocialMediaDisconnect = async (platform) => {
+    try {
+      const response = await apiFetch(`/social-media/${platform}/disconnect`, { method: "POST" });
+      if (response.ok) {
+        setPlatformStatus(prev => ({ 
+          ...prev, 
+          [platform]: { ...prev[platform], connected: false } 
+        }));
+        toast.success(`Successfully disconnected from ${platform.charAt(0).toUpperCase() + platform.slice(1)}`);
+      }
+    } catch (error) {
+      console.error(`Failed to disconnect from ${platform}:`, error);
+      toast.error(`Failed to disconnect from ${platform}`);
+    }
+  };
+
+  const handleSaveCredentials = async (platform, credentials) => {
+    try {
+      const response = await apiFetch(`/social-media/${platform}/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials)
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        setPlatformStatus(prev => ({ 
+          ...prev, 
+          [platform]: { ...prev[platform], connected: true } 
+        }));
+        toast.success(`Successfully connected to ${platform.charAt(0).toUpperCase() + platform.slice(1)}!`);
+      } else {
+        throw new Error(result.error || 'Connection failed');
+      }
+    } catch (error) {
+      console.error(`Failed to connect to ${platform}:`, error);
+      toast.error(`Failed to connect to ${platform}: ${error.message}`);
+      throw error;
+    }
+  };
+
+  const getSocialMediaPlatformConfig = (platform) => {
+    const configs = {
+      facebook: {
+        name: 'Facebook',
+        icon: Facebook,
+        color: 'bg-blue-600',
+        description: 'Connect your Facebook page to post content automatically'
+      },
+      twitter: {
+        name: 'Twitter',
+        icon: Twitter,
+        color: 'bg-black',
+        description: 'Connect your Twitter account to post tweets automatically'
+      },
+      reddit: {
+        name: 'Reddit',
+        icon: MessageCircle,
+        color: 'bg-orange-600',
+        description: 'Connect your Reddit account to post to subreddits automatically'
+      }
+    };
+    return configs[platform];
+  };
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Settings</h1>
+
+      {/* Social Media Connections Section */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-medium text-gray-900">Social Media Connections</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {['facebook', 'twitter', 'reddit'].map((platform) => {
+            const config = getSocialMediaPlatformConfig(platform);
+            const status = platformStatus[platform];
+            const Icon = config.icon;
+            
+            return (
+              <Card key={platform} title={config.name}>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 ${config.color} rounded-lg flex items-center justify-center`}>
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <div className="font-medium">Integration status</div>
+                        <div className="text-sm text-gray-600">
+                          {status.checking ? "Checking..." : status.connected ? "Connected" : "Not connected"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className={`${status.checking ? 'bg-yellow-500' : status.connected ? 'bg-green-500' : 'bg-red-500'} w-2 h-2 rounded-full`} />
+                      <span className="text-sm text-gray-600">
+                        {status.checking ? "Checking" : status.connected ? "Connected" : "Disconnected"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {status.connected ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleSocialMediaDisconnect(platform)}
+                        disabled={status.checking}
+                      >
+                        Disconnect
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => handleSocialMediaConnect(platform)}
+                        disabled={status.checking}
+                      >
+                        {status.checking ? "Checking..." : "Connect"}
+                      </Button>
+                    )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setPlatformStatus(prev => ({ ...prev, [platform]: { ...prev[platform], checking: true } }));
+                        checkAllSocialMediaStatus();
+                      }}
+                      disabled={status.checking}
+                    >
+                      {status.checking ? "Checking..." : "Refresh"}
+                    </Button>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {config.description}
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card title="Google Drive">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Integration status</div>
+                <div className="text-sm text-gray-600">
+                  {checkingStatus ? "Checking..." : driveConnected ? "Connected" : "Disconnected"}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className={`${checkingStatus ? 'bg-yellow-500' : driveConnected ? 'bg-green-500' : 'bg-red-500'} w-2 h-2 rounded-full`} />
+                <span className="text-sm text-gray-600">
+                  {checkingStatus ? "Checking" : driveConnected ? "Connected" : "Disconnected"}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {driveConnected ? (
+                <Button
+                  variant="secondary"
+                  onClick={disconnectGoogle}
+                  disabled={loading}
+                >
+                  {loading ? "Disconnecting..." : "Disconnect"}
+                </Button>
+              ) : (
+                <Button
+                  onClick={connectToGoogle}
+                  disabled={loading}
+                >
+                  {loading ? "Connecting..." : "Connect"}
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={checkGoogleStatus}
+                disabled={checkingStatus}
+              >
+                {checkingStatus ? "Checking..." : "Refresh Status"}
+              </Button>
+            </div>
+            <div className="text-xs text-gray-500">
+              Save your campaigns and images to Google Drive in JSON format
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Google Calendar">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Integration status</div>
+                <div className="text-sm text-gray-600">
+                  {checkingStatus ? "Checking..." : calendarConnected ? "Connected" : "Disconnected"}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className={`${checkingStatus ? 'bg-yellow-500' : calendarConnected ? 'bg-green-500' : 'bg-red-500'} w-2 h-2 rounded-full`} />
+                <span className="text-sm text-gray-600">
+                  {checkingStatus ? "Checking" : calendarConnected ? "Connected" : "Disconnected"}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {calendarConnected ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setCalendarConnected(false);
+                    setDriveConnected(false);
+                    toast.success("Disconnected from Google Calendar");
+                  }}
+                  disabled={calendarLoading}
+                >
+                  {calendarLoading ? "Disconnecting..." : "Disconnect"}
+                </Button>
+              ) : (
+                <Button
+                  onClick={connectToGoogle}
+                  disabled={calendarLoading || loading}
+                >
+                  {calendarLoading || loading ? "Connecting..." : "Connect"}
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={checkGoogleStatus}
+                disabled={checkingStatus}
+              >
+                {checkingStatus ? "Checking..." : "Refresh Status"}
+              </Button>
+            </div>
+            <div className="text-xs text-gray-500">
+              Create calendar events for scheduled social media posts with reminders
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Notifications">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">Enable notifications</div>
+              <div className="text-sm text-gray-600">
+                Receive updates about campaign status
+              </div>
+            </div>
+            <button
+              role="switch"
+              aria-checked={notifications}
+              onClick={() => setNotifications((v) => !v)}
+              className={
+                (notifications ? "bg-blue-600" : "bg-gray-300") +
+                " relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+              }
+            >
+              <span
+                className={
+                  (notifications ? "translate-x-6" : "translate-x-1") +
+                  " inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                }
+              />
+            </button>
+          </div>
+        </Card>
+
+        <Card title="Account">
+          <div className="space-y-3">
+            <div className="text-sm text-gray-600">
+              User: Alex Johnson (alex@example.com)
+            </div>
+            <Button variant="danger">Delete account</Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* Social Media Connection Modal */}
+      <SocialMediaConnectionModal
+        open={socialMediaModal.open}
+        onOpenChange={(open) => setSocialMediaModal({ open, platform: socialMediaModal.platform })}
+        platform={socialMediaModal.platform}
+        onSave={handleSaveCredentials}
+      />
+    </div>
+  );
+}
+
+export default Settings;
