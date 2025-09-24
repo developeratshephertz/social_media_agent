@@ -47,6 +47,7 @@ class Post(Base):
     engagement_metrics = Column(JSON)  # Store engagement data as JSON
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    campaign_name = Column(String(255), nullable=True)
     
     # Relationships
     campaign = relationship("Campaign", back_populates="posts")

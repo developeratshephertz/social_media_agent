@@ -23,7 +23,8 @@ class DatabaseService:
     
     @staticmethod
     async def create_post(
-        original_description: str,
+        campaign_name: str = None,
+        original_description: str = None,
         caption: str = None,
         image_path: str = None,
         scheduled_at: datetime = None,
@@ -35,30 +36,65 @@ class DatabaseService:
     ) -> str:
         """Create a new post and return its ID"""
         try:
-            # Insert post
-            query = """
-                INSERT INTO posts (id, campaign_id, original_description, caption, 
-                                 image_path, scheduled_at, platforms, subreddit, status, batch_id)
-                VALUES (:id, :campaign_id, :description, :caption, :image_path, 
-                       :scheduled_at, :platforms, :subreddit, :status, :batch_id)
-                RETURNING id
-            """
-            post_id = str(uuid.uuid4())
-            values = {
-                "id": post_id,
-                "campaign_id": campaign_id,
-                "description": original_description,
-                "caption": caption,
-                "image_path": image_path,
-                "scheduled_at": scheduled_at,
-                "platforms": platforms,
-                "subreddit": subreddit,
-                "status": status or ("draft" if not scheduled_at else "scheduled"),
-                "batch_id": batch_id
-            }
+            # Truncate caption if it's too long (database constraint workaround)
+            if caption and len(caption) > 500:
+                caption = caption[:497] + "..."
+                # Caption truncated to 500 characters
             
-            await db_manager.execute_query(query, values)
-            return post_id
+            # Insert post with campaign_name (will work if column exists, ignore if not)
+            try:
+                # Try with campaign_name first
+                query = """
+                    INSERT INTO posts (id, campaign_id, campaign_name, original_description, caption, 
+                                     image_path, scheduled_at, platforms, subreddit, status, batch_id)
+                    VALUES (:id, :campaign_id, :campaign_name, :description, :caption, :image_path, 
+                           :scheduled_at, :platforms, :subreddit, :status, :batch_id)
+                    RETURNING id
+                """
+                post_id = str(uuid.uuid4())
+                values = {
+                    "id": post_id,
+                    "campaign_id": campaign_id,
+                    "campaign_name": campaign_name or "",
+                    "description": original_description,
+                    "caption": caption,
+                    "image_path": image_path,
+                    "scheduled_at": scheduled_at,
+                    "platforms": platforms,
+                    "subreddit": subreddit,
+                    "status": status or ("draft" if not scheduled_at else "scheduled"),
+                    "batch_id": batch_id
+                }
+                await db_manager.execute_query(query, values)
+                return post_id
+            except Exception as e:
+                if "campaign_name" in str(e):
+                    # Fallback to without campaign_name
+                    # Campaign name column not found, using fallback
+                    query = """
+                        INSERT INTO posts (id, campaign_id, original_description, caption, 
+                                         image_path, scheduled_at, platforms, subreddit, status, batch_id)
+                        VALUES (:id, :campaign_id, :description, :caption, :image_path, 
+                               :scheduled_at, :platforms, :subreddit, :status, :batch_id)
+                        RETURNING id
+                    """
+                    post_id = str(uuid.uuid4())
+                    values = {
+                        "id": post_id,
+                        "campaign_id": campaign_id,
+                        "description": original_description,
+                        "caption": caption,
+                        "image_path": image_path,
+                        "scheduled_at": scheduled_at,
+                        "platforms": platforms,
+                        "subreddit": subreddit,
+                        "status": status or ("draft" if not scheduled_at else "scheduled"),
+                        "batch_id": batch_id
+                    }
+                    await db_manager.execute_query(query, values)
+                    return post_id
+                else:
+                    raise e
             
         except Exception as e:
             print(f"Error creating post: {e}")
@@ -326,7 +362,7 @@ class DatabaseService:
             query = """
                 SELECT p.id, p.original_description, p.caption, p.image_path,
                        p.status, p.platforms, p.scheduled_at, p.created_at, p.batch_id,
-                       c.name as campaign_name
+                       COALESCE(p.campaign_name, c.name, 'Untitled Campaign') as campaign_name
                 FROM posts p
                 LEFT JOIN campaigns c ON p.campaign_id = c.id
                 ORDER BY p.created_at DESC
@@ -346,11 +382,13 @@ class DatabaseService:
         try:
             query = """
                 SELECT p.id, p.original_description, p.caption, p.image_path,
-                       p.scheduled_at, p.platforms, p.subreddit, p.status
+                       p.scheduled_at, p.platforms, p.subreddit, p.status,
+                       COALESCE(p.campaign_name, c.name, 'Untitled Campaign') as campaign_name
                 FROM posts p
+                LEFT JOIN campaigns c ON p.campaign_id = c.id
                 WHERE p.status = 'scheduled' 
                   AND p.scheduled_at IS NOT NULL
-                  AND p.scheduled_at <= NOW() + INTERVAL '1 day'
+                  AND p.scheduled_at <= NOW() + INTERVAL '7 days'
                 ORDER BY p.scheduled_at ASC
             """
             
@@ -383,7 +421,7 @@ class DatabaseService:
             query = """
                 SELECT p.id, p.original_description, p.caption, p.image_path,
                        p.status, p.platforms, p.scheduled_at, p.created_at, p.batch_id,
-                       c.name as campaign_name
+                       COALESCE(p.campaign_name, c.name, 'Untitled Campaign') as campaign_name
                 FROM posts p
                 LEFT JOIN campaigns c ON p.campaign_id = c.id
                 WHERE p.batch_id = :batch_id
@@ -588,6 +626,32 @@ class DatabaseService:
             
         except Exception as e:
             print(f"Error deleting post {post_id}: {e}")
+            return False
+    
+    @staticmethod
+    async def clear_all_posts() -> bool:
+        """Clear all posts from the database (for testing purposes)"""
+        try:
+            # Delete in order: schedules -> captions -> images -> posts
+            # This avoids foreign key constraint issues
+            
+            # Delete posting schedules
+            await db_manager.execute_query("DELETE FROM posting_schedules")
+            
+            # Delete captions
+            await db_manager.execute_query("DELETE FROM captions")
+            
+            # Delete images
+            await db_manager.execute_query("DELETE FROM images")
+            
+            # Delete posts
+            await db_manager.execute_query("DELETE FROM posts")
+            
+            print("All posts cleared from database")
+            return True
+            
+        except Exception as e:
+            print(f"Error clearing all posts: {e}")
             return False
 
 

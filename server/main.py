@@ -75,6 +75,10 @@ from fastapi.responses import FileResponse
 # Include Google integration router
 app.include_router(google_router)
 
+# Include social media routes
+from social_media_routes import router as social_media_router
+app.include_router(social_media_router)
+
 # Lifespan events are now handled in the lifespan context manager above
 
 # API Keys
@@ -107,6 +111,7 @@ class BatchRequest(BaseModel):
     image_provider: Optional[str] = "stability"  # stability, chatgpt, nano_banana
     platforms: Optional[List[str]] = ["instagram"]  # Array of platforms: instagram, facebook, twitter, reddit
     subreddit: Optional[str] = None  # For Reddit posts
+    campaign_name: Optional[str] = None  # Campaign name for the batch
 
 
 class BatchItem(BaseModel):
@@ -675,10 +680,137 @@ async def generate_caption_endpoint(request: PostRequest):
         return PostResponse(success=False, error=f"Error generating caption: {str(e)}")
 
 
+@app.post("/generate-captions-batch")
+async def generate_captions_batch(request: BatchRequest):
+    """Generate multiple captions only (for advanced mode)"""
+    try:
+        description = (request.description or "").strip()
+        if len(description) < 3:
+            raise HTTPException(
+                status_code=400, detail="Description must be at least 3 characters long"
+            )
+        if request.num_posts <= 0:
+            raise HTTPException(
+                status_code=400, detail="num_posts must be a positive integer"
+            )
+        if request.num_posts > 20:
+            raise HTTPException(
+                status_code=400, detail="num_posts is too large; max 20 per batch"
+            )
+
+        captions = []
+        for i in range(request.num_posts):
+            try:
+                # Generate varied description for each caption
+                if request.num_posts > 1:
+                    varied_description = f"{description} - variation {i + 1}"
+                else:
+                    varied_description = description
+                
+                caption = generate_caption(varied_description, request.caption_provider)
+                captions.append(caption)
+                
+            except Exception as e:
+                print(f"Error generating caption {i + 1}: {e}")
+                captions.append(f"Error generating caption: {str(e)}")
+        
+        return {"success": True, "captions": captions}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": f"Error generating captions: {str(e)}"}
+
+@app.post("/generate-image-only")
+async def generate_image_only(request: dict):
+    """Generate image only without creating a post (for advanced mode)"""
+    try:
+        description = request.get("description", "").strip()
+        image_provider = request.get("image_provider", "stability")
+        
+        if len(description) < 3:
+            raise HTTPException(
+                status_code=400, detail="Description must be at least 3 characters long"
+            )
+        
+        # Generate image using selected provider
+        image_path = generate_image(description, image_provider)
+        
+        if not image_path:
+            raise HTTPException(
+                status_code=500, detail="Failed to generate image. Please try again."
+            )
+        
+        return {"success": True, "image_path": image_path}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": f"Error generating image: {str(e)}"}
+
+@app.post("/upload-custom-image")
+async def upload_custom_image(request: dict):
+    """Upload and save a custom image from data URL"""
+    try:
+        data_url = request.get("data_url", "").strip()
+        description = request.get("description", "custom_image").strip()
+        
+        if not data_url or not data_url.startswith('data:image/'):
+            raise HTTPException(
+                status_code=400, detail="Invalid data URL. Must be a valid image data URL."
+            )
+        
+        # Parse data URL
+        try:
+            header, data = data_url.split(',', 1)
+            # Extract image format from header (e.g., "data:image/jpeg;base64")
+            format_part = header.split(';')[0].split('/')[-1]
+            if format_part not in ['jpeg', 'jpg', 'png', 'gif', 'webp']:
+                format_part = 'png'  # Default to PNG
+            
+            # Decode base64 data
+            image_data = base64.b64decode(data)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid data URL format: {str(e)}"
+            )
+        
+        # Create filename with timestamp and hash
+        timestamp = int(time.time())
+        hash_suffix = hashlib.md5(image_data[:1000]).hexdigest()[:8]  # Use first 1KB for hash
+        filename = f"custom_{description}_{timestamp}_{hash_suffix}.{format_part}"
+        
+        # Ensure public directory exists
+        public_dir = "public"
+        if not os.path.exists(public_dir):
+            os.makedirs(public_dir)
+        
+        # Save image file
+        file_path = os.path.join(public_dir, filename)
+        with open(file_path, 'wb') as f:
+            f.write(image_data)
+        
+        # Return the relative path for the frontend
+        relative_path = f"/public/{filename}"
+        
+        print(f"Custom image uploaded: {file_path}")
+        return {
+            "success": True, 
+            "image_path": relative_path,
+            "filename": filename
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error uploading custom image: {e}")
+        return {"success": False, "error": f"Error uploading image: {str(e)}"}
+
 def _compute_schedule_dates(num_posts: int, days: int) -> List[str]:
     """Distribute posts across the given days; allow multiple posts per day.
     
     Posts start from the next hour after current time.
+    No posts scheduled after 10 PM (22:00).
     Example: If created at 2:30 PM, first post at 3:00 PM.
     """
     if num_posts <= 0:
@@ -686,31 +818,73 @@ def _compute_schedule_dates(num_posts: int, days: int) -> List[str]:
     if days <= 0:
         days = 1
 
-    # Posts per day (ceil)
-    per_day = (num_posts + days - 1) // days
+    # Define business hours (9 AM to 10 PM)
+    EARLIEST_HOUR = 9
+    LATEST_HOUR = 22  # 10 PM
+    BUSINESS_HOURS_PER_DAY = LATEST_HOUR - EARLIEST_HOUR  # 13 hours
 
-    # Start from next hour after current time
+    # Start from next hour after current time, but not earlier than 9 AM
     now = datetime.now()
-    start_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    
+    # If it's past 10 PM, start tomorrow at 9 AM
+    if next_hour.hour > LATEST_HOUR:
+        start_time = (next_hour + timedelta(days=1)).replace(hour=EARLIEST_HOUR)
+    # If it's before 9 AM, start at 9 AM today
+    elif next_hour.hour < EARLIEST_HOUR:
+        start_time = next_hour.replace(hour=EARLIEST_HOUR)
+    else:
+        start_time = next_hour
+
+    # Calculate optimal distribution
+    posts_per_day = (num_posts + days - 1) // days  # Ceiling division
+    
+    # If too many posts for business hours, spread across more days
+    if posts_per_day > BUSINESS_HOURS_PER_DAY:
+        # Recalculate days to accommodate all posts within business hours
+        days = (num_posts + BUSINESS_HOURS_PER_DAY - 1) // BUSINESS_HOURS_PER_DAY
+        posts_per_day = (num_posts + days - 1) // days
 
     results: List[str] = []
     for i in range(num_posts):
-        day_index = i // per_day
-        slot_index = i % per_day
+        day_index = i // posts_per_day
+        slot_index = i % posts_per_day
 
+        # Start at the base time for this day
         schedule_time = start_time + timedelta(days=day_index)
         
-        if per_day == 1:
-            # Single post per day, maintain the start time for each day
-            pass  # schedule_time is already set correctly
+        if posts_per_day == 1:
+            # Single post per day, use the start time for each day
+            # But ensure it's within business hours
+            if schedule_time.hour < EARLIEST_HOUR:
+                schedule_time = schedule_time.replace(hour=EARLIEST_HOUR)
+            elif schedule_time.hour > LATEST_HOUR:
+                schedule_time = schedule_time.replace(hour=LATEST_HOUR)
         else:
-            # Multiple posts per day, spread them out
-            hour_step = max(1, 12 // per_day)  # Spread over 12 hours
-            schedule_time += timedelta(hours=slot_index * hour_step)
+            # Multiple posts per day, distribute evenly within business hours
+            base_hour = max(schedule_time.hour, EARLIEST_HOUR)
+            hours_remaining_today = LATEST_HOUR - base_hour
             
-            # Don't schedule too late (before 10 PM)
-            if schedule_time.hour > 22:
-                schedule_time = schedule_time.replace(hour=22, minute=0)
+            # If not enough hours left today for all posts, spread across more days
+            if hours_remaining_today < posts_per_day - 1:
+                # Redistribute posts across more days to stay within business hours
+                # Move this post to the next day if needed
+                if slot_index > hours_remaining_today:
+                    extra_days = (slot_index - hours_remaining_today + BUSINESS_HOURS_PER_DAY - 1) // BUSINESS_HOURS_PER_DAY
+                    schedule_time = (schedule_time + timedelta(days=extra_days)).replace(hour=EARLIEST_HOUR)
+                    slot_index = slot_index % BUSINESS_HOURS_PER_DAY
+                    base_hour = EARLIEST_HOUR
+                    hours_remaining_today = BUSINESS_HOURS_PER_DAY
+            
+            # Calculate the target hour within business hours
+            if posts_per_day > 1 and hours_remaining_today > 0:
+                hour_spacing = max(1, hours_remaining_today // posts_per_day)
+                target_hour = base_hour + (slot_index * hour_spacing)
+                
+                # Ensure we absolutely don't exceed business hours
+                target_hour = min(target_hour, LATEST_HOUR)
+                
+                schedule_time = schedule_time.replace(hour=target_hour)
 
         results.append(schedule_time.isoformat())
     return results
@@ -814,6 +988,7 @@ async def generate_batch(request: BatchRequest):
                 try:
                     # Create post record as draft
                     post_id = await db_service.create_post(
+                        campaign_name=request.campaign_name or "",
                         original_description=varied_description,  # Use varied description
                         caption=caption,
                         image_path=image_path,
@@ -888,6 +1063,42 @@ async def generate_batch(request: BatchRequest):
         return BatchResponse(success=False, items=[], error=f"Error generating batch: {str(e)}")
 
 
+@app.post("/api/batch/create")
+async def create_batch_only(request: BatchRequest):
+    """Create a batch operation without generating posts (for advanced mode)"""
+    try:
+        description = (request.description or "").strip()
+        if len(description) < 3:
+            raise HTTPException(
+                status_code=400, detail="Description must be at least 3 characters long"
+            )
+        if request.days <= 0:
+            raise HTTPException(status_code=400, detail="Days must be a positive integer")
+        if request.num_posts <= 0:
+            raise HTTPException(
+                status_code=400, detail="num_posts must be a positive integer"
+            )
+        if request.num_posts > 20:
+            raise HTTPException(
+                status_code=400, detail="num_posts is too large; max 20 per batch"
+            )
+
+        # Create batch operation record only
+        batch_id = await db_service.create_batch_operation(
+            description=description,
+            num_posts=request.num_posts,
+            days_duration=request.days,
+            created_by="api_user"
+        )
+        
+        return {"success": True, "batch_id": batch_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": f"Error creating batch: {str(e)}"}
+
+
 # Database management endpoints
 @app.post("/api/posts")
 async def create_post(post_data: dict):
@@ -904,6 +1115,7 @@ async def create_post(post_data: dict):
         
         # Create post record
         post_id = await db_service.create_post(
+            campaign_name=post_data.get('campaign_name', ''),
             original_description=post_data.get('original_description', ''),
             caption=post_data.get('caption', ''),
             image_path=post_data.get('image_path'),
@@ -1005,6 +1217,20 @@ async def delete_post(post_id: str):
         return {"success": False, "error": str(e)}
 
 
+@app.delete("/api/posts/clear-all")
+async def clear_all_posts():
+    """Clear all posts from the database (for testing purposes)"""
+    try:
+        success = await db_service.clear_all_posts()
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to clear all posts")
+        return {"success": True, "message": "All posts cleared successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/scheduled-posts")
 async def get_scheduled_posts():
     """Get posts that are scheduled for posting"""
@@ -1042,6 +1268,37 @@ async def get_batch_posts(batch_id: str):
 class ScheduleBatchRequest(BaseModel):
     platforms: List[str]
     days: int
+
+
+class GenerateScheduleRequest(BaseModel):
+    num_posts: int
+    days: int
+
+
+@app.post("/api/generate-schedule")
+async def generate_schedule_dates(request: GenerateScheduleRequest):
+    """Generate optimal schedule dates for posts without requiring a batch"""
+    try:
+        if request.num_posts <= 0:
+            raise HTTPException(status_code=400, detail="num_posts must be positive")
+        if request.days <= 0:
+            raise HTTPException(status_code=400, detail="days must be positive")
+        if request.num_posts > 50:
+            raise HTTPException(status_code=400, detail="num_posts cannot exceed 50")
+        
+        schedule_times = _compute_schedule_dates(request.num_posts, request.days)
+        
+        return {
+            "success": True, 
+            "schedule_times": schedule_times,
+            "num_posts": request.num_posts,
+            "days": request.days
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/batch/{batch_id}/schedule")
@@ -2000,6 +2257,35 @@ if __name__ == "__main__":
     
     print("\n🚀 Starting Social Media Agent API...\n")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+# Trending topics endpoints
+from trending_topics_service import trending_service
+
+@app.get("/api/trending/ai-topics")
+async def get_ai_trending_topics(category: Optional[str] = None):
+    """Get AI-powered trending topics with optional category filter"""
+    try:
+        result = trending_service.get_trending_topics(category)
+        return result
+    except Exception as e:
+        logger.error(f"Error getting trending topics: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/trending/refresh")
+async def refresh_trending_topics():
+    """Force refresh trending topics (bypass cache)"""
+    try:
+        result = trending_service.refresh_topics()
+        return result
+    except Exception as e:
+        logger.error(f"Error refreshing trending topics: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 # Frontend serving - must be after all API routes
 @app.get("/api/info")

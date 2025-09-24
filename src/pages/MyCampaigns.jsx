@@ -11,6 +11,8 @@ import PostEventModal from "../components/PostEventModal.jsx";
 import { useCampaignStore } from "../store/campaignStore.js";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { apiFetch, apiUrl } from "../lib/api.js";
+import apiClient from "../lib/apiClient.js";
 
 function statusColor(status) {
   if (status === "Posted") return "green";
@@ -39,8 +41,10 @@ function IconButton({ title, onClick, children, variant = "ghost" }) {
 function MyCampaigns() {
   const campaigns = useCampaignStore((s) => s.campaigns);
   const updateCampaign = useCampaignStore((s) => s.updateCampaign);
+  const deleteCampaign = useCampaignStore((s) => s.deleteCampaign);
   const deleteCampaignsWhere = useCampaignStore((s) => s.deleteCampaignsWhere);
   const loadCampaignsFromDB = useCampaignStore((s) => s.loadCampaignsFromDB);
+  const clearAllCampaigns = useCampaignStore((s) => s.clearAllCampaigns);
   const isLoading = useCampaignStore((s) => s.isLoading);
 
   const [scheduleForId, setScheduleForId] = useState(null);
@@ -54,30 +58,22 @@ function MyCampaigns() {
   const [isPostEventModalOpen, setIsPostEventModalOpen] = useState(false);
   const [batchCalendarView, setBatchCalendarView] = useState(null); // For batch-specific calendar
   const [platformScheduleModal, setPlatformScheduleModal] = useState(null); // For platform selection when scheduling
-  const [selectedPlatformsForScheduling, setSelectedPlatformsForScheduling] = useState([]); // Array of selected platforms
-  const [subredditForScheduling, setSubredditForScheduling] = useState("");
+  const [selectedPlatformsForScheduling, setSelectedPlatformsForScheduling] = useState([]);
   const [schedulingProgress, setSchedulingProgress] = useState({
     visible: false,
     progress: 0,
     currentStep: 0,
     steps: ["Uploading to Drive", "Creating Calendar Events", "Finalizing"]
   });
+  const [deleteBatchConfirm, setDeleteBatchConfirm] = useState(null);
 
-  // Handle platform selection for scheduling
-  const handlePlatformToggleForScheduling = (platform) => {
+  const handlePlatformToggle = (platform) => {
     setSelectedPlatformsForScheduling(prev => {
-      const newPlatforms = prev.includes(platform)
-        ? prev.filter(p => p !== platform)
-        : [...prev, platform];
-      return newPlatforms;
+      if (prev.includes(platform)) {
+        return prev.filter(p => p !== platform);
+      }
+      return [...prev, platform];
     });
-  };
-
-  // Reset platform selection when modal opens
-  const openPlatformScheduleModal = (batch) => {
-    setSelectedPlatformsForScheduling([]);
-    setSubredditForScheduling("");
-    setPlatformScheduleModal(batch);
   };
 
   const batches = useMemo(() => {
@@ -114,47 +110,64 @@ function MyCampaigns() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete ${itemsToDelete.length} posts? This action cannot be undone.`)) {
-      return;
-    }
-
     try {
-      // Delete from backend first
-      const deletePromises = itemsToDelete.map(async (item) => {
-        try {
-          const response = await fetch(`http://localhost:8000/api/posts/${item.id}`, {
-            method: 'DELETE'
-          });
-          const result = await response.json();
-          if (!result.success) {
-            console.error(`Failed to delete post ${item.id}:`, result.error);
-            return false;
-          }
-          return true;
-        } catch (error) {
-          console.error(`Error deleting post ${item.id}:`, error);
-          return false;
+      // Best-effort delete any linked calendar events first
+      await Promise.allSettled(itemsToDelete.map(async (item) => {
+        if (item.calendarEventId) {
+          try { await apiFetch(`/api/calendar/events/${item.calendarEventId}`, { method: "DELETE" }); } catch { }
         }
-      });
+      }));
 
-      const results = await Promise.all(deletePromises);
-      const successCount = results.filter(Boolean).length;
-      const failCount = results.length - successCount;
+      // Delete each campaign via store (optimistic + backend)
+      const results = await Promise.allSettled(itemsToDelete.map((item) => deleteCampaign(item.id)));
+      const failed = results.filter(r => r.status === 'rejected').length;
 
-      if (successCount > 0) {
-        toast.success(`Deleted ${successCount} posts`);
+      if (failed === 0) {
+        toast.success(`Deleted ${itemsToDelete.length} posts`);
+      } else if (failed < itemsToDelete.length) {
+        toast.warning(`Deleted ${itemsToDelete.length - failed} posts. ${failed} failed.`);
+      } else {
+        toast.error("Failed to delete posts");
       }
-      if (failCount > 0) {
-        toast.error(`Failed to delete ${failCount} posts`);
-      }
 
-      // Refresh campaigns from database to show current state
+      // Refresh campaigns from database to ensure consistency
       await loadCampaignsFromDB();
     } catch (error) {
       console.error("Error deleting batch:", error);
       toast.error("Failed to delete some items");
-      // Refresh anyway to show current state
       await loadCampaignsFromDB();
+    }
+  };
+
+  // Save entire batch as Draft (unschedule + keep)
+  const saveBatchAsDraft = async (batchId) => {
+    const itemsToDraft = campaigns.filter((c) =>
+      batchId === "single" ? !c.batchId : c.batchId === batchId
+    );
+    if (itemsToDraft.length === 0) {
+      toast.error("No items to update");
+      return;
+    }
+    try {
+      // For each item: clear schedule and set Draft
+      for (const item of itemsToDraft) {
+        try {
+          // Update local + DB via store helper
+          await updateCampaign(item.id, { status: "Draft", scheduledAt: null });
+          // Best-effort: delete any existing calendar event for the post
+          if (item.calendarEventId) {
+            try {
+              await apiFetch(`/api/calendar/events/${item.calendarEventId}`, { method: "DELETE" });
+            } catch { }
+          }
+        } catch (e) {
+          console.warn("Failed to save as draft:", item.id, e);
+        }
+      }
+      toast.success(`Saved ${itemsToDraft.length} posts as Draft`);
+    } catch (e) {
+      console.error("Batch draft save failed:", e);
+      toast.error("Failed to save items as Draft");
     }
   };
 
@@ -172,9 +185,8 @@ function MyCampaigns() {
   // Fetch calendar events from backend
   const fetchCalendarEvents = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/calendar/events");
-      const data = await response.json();
-      if (data.success) {
+      const data = await apiClient.getCalendarEvents();
+      if (data && data.success) {
         setCalendarEvents(data.events || []);
       }
     } catch (error) {
@@ -185,11 +197,9 @@ function MyCampaigns() {
   // Fetch posts from database to ensure calendar reflects database state
   const fetchDatabasePosts = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/posts?limit=50");
-      const data = await response.json();
-      if (data.success && data.posts) {
+      const data = await apiClient.getPosts({ limit: 50 });
+      if (data && data.success && data.posts) {
         console.log(`Fetched ${data.posts.length} posts from database`);
-        // Log database posts for debugging
         data.posts.forEach(post => {
           if (post.scheduled_at) {
             console.log(`Database post: ${post.original_description} scheduled for ${post.scheduled_at}`);
@@ -218,30 +228,61 @@ function MyCampaigns() {
     });
 
     try {
-      // Use the same scheduling logic as in CreateCampaign
-      const scheduleDates = (count) => {
-        const now = new Date();
-        const startTime = new Date(now);
-        startTime.setHours(now.getHours() + 1, 0, 0, 0);
-
-        const out = [];
-        for (let i = 0; i < count; i++) {
-          let scheduleTime = new Date(startTime);
-          // Space posts 2 hours apart
-          scheduleTime.setHours(scheduleTime.getHours() + (i * 2));
-
-          // Don't schedule too late (before 10 PM)
-          if (scheduleTime.getHours() > 22) {
-            scheduleTime.setDate(scheduleTime.getDate() + 1);
-            scheduleTime.setHours(10, 0, 0, 0);
+      const numPosts = draftItems.length;
+      let days = 2; // Default to 2 days
+      
+      // Try to fetch the original days parameter from the batch operation
+      if (batchId && batchId !== "single") {
+        try {
+          const batchResponse = await apiFetch(`/api/batch/${batchId}/status`);
+          if (batchResponse.ok) {
+            const batchData = await batchResponse.json();
+            if (batchData.success && batchData.batch && batchData.batch.days_duration) {
+              days = batchData.batch.days_duration;
+              console.log(`📅 Retrieved original days parameter from batch: ${days}`);
+            }
           }
-
-          out.push(scheduleTime.toISOString());
+        } catch (error) {
+          console.warn(`Failed to fetch batch info for ${batchId}:`, error);
         }
-        return out;
-      };
+      }
+      
+      // Fallback logic if we couldn't get the original days parameter
+      if (days <= 0) {
+        if (numPosts <= 3) {
+          days = 1;
+        } else if (numPosts <= 6) {
+          days = 2;
+        } else if (numPosts <= 14) {
+          days = 7;
+        } else {
+          days = Math.ceil(numPosts / 3); // Distribute more posts across more days
+        }
+      }
 
-      const dates = scheduleDates(draftItems.length);
+      // Use backend API for consistent scheduling logic
+      console.log(`📅 Getting schedule dates from backend for ${numPosts} posts across ${days} days`);
+      let dates;
+      try {
+        const scheduleResponse = await apiClient.generateScheduleDates({
+          num_posts: numPosts,
+          days: days
+        });
+        
+        if (!scheduleResponse || !scheduleResponse.schedule_times) {
+          throw new Error('Failed to get schedule times from backend');
+        }
+        
+        dates = scheduleResponse.schedule_times;
+        console.log(`✅ Retrieved ${dates.length} schedule times from backend:`);
+        dates.forEach((date, i) => {
+          console.log(`   Post ${i + 1}: ${new Date(date).toLocaleString()}`);
+        });
+      } catch (error) {
+        console.error('❌ Failed to get schedule from backend:', error);
+        toast.error('Failed to generate schedule times');
+        return;
+      }
 
       // Step 1: Update campaigns with schedule info
       setSchedulingProgress(prev => ({ ...prev, progress: 10, currentStep: 0 }));
@@ -251,7 +292,7 @@ function MyCampaigns() {
         const updatedData = {
           scheduledAt: dates[i],
           status: "Scheduled",
-          platforms: selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling : [item.platform || "facebook"]
+          platform: selectedPlatformForScheduling || item.platform || "instagram"
         };
 
         // Update local state
@@ -259,19 +300,18 @@ function MyCampaigns() {
 
         // Also update the database
         try {
-          const updateResponse = await fetch(`http://localhost:8000/api/posts/${item.id}`, {
+          const updateResponse = await apiFetch(`/api/posts/${item.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               scheduled_at: dates[i],
               status: "scheduled",
-              platforms: selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling : [item.platform || "facebook"],
-              subreddit: selectedPlatformsForScheduling.includes("reddit") ? subredditForScheduling : null
+              platform: selectedPlatformForScheduling || item.platform || "instagram"
             })
           });
 
           if (updateResponse.ok) {
-            console.log(`📅 Campaign ${item.id} scheduled for ${new Date(dates[i]).toLocaleString()} on platforms: ${selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling.join(', ') : (item.platform || "facebook")}`);
+            console.log(`📅 Campaign ${item.id} scheduled for ${new Date(dates[i]).toLocaleString()} on ${selectedPlatformForScheduling || item.platform || "instagram"}`);
           } else {
             console.error(`Failed to update database for campaign ${item.id}`);
           }
@@ -285,7 +325,7 @@ function MyCampaigns() {
       // Step 2: Check Google connection and upload to Google Drive
       let googleConnected = false;
       try {
-        const googleStatusResponse = await fetch("http://localhost:8000/google/status");
+        const googleStatusResponse = await apiFetch("/google/status");
         const googleStatusData = await googleStatusResponse.json();
         googleConnected = googleStatusData.connected;
         console.log(`Google connection status: ${googleConnected}`);
@@ -302,7 +342,7 @@ function MyCampaigns() {
             // Ensure the imageUrl is in the correct format for backend access
             let processedImageUrl = item.imageUrl;
             if (processedImageUrl && processedImageUrl.startsWith('/public/')) {
-              processedImageUrl = `http://localhost:8000${processedImageUrl}`;
+              processedImageUrl = apiUrl(processedImageUrl);
             }
 
             const campaignData = {
@@ -311,19 +351,19 @@ function MyCampaigns() {
               generatedContent: item.generatedContent,
               scheduledAt: dates[i],
               status: "Scheduled",
-              platforms: selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling : [item.platform || "facebook"],
+              platform: selectedPlatformForScheduling || item.platform || "instagram",
               imageUrl: processedImageUrl,
               activity: [
                 { time: Date.now(), text: "Campaign created" },
                 { time: Date.now(), text: "AI caption generated" },
                 { time: Date.now(), text: "AI image generated" },
                 { time: Date.now(), text: "Campaign scheduled" },
-                { time: Date.now(), text: `Scheduled for ${selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling.join(', ') : (item.platform || "facebook")}` }
+                { time: Date.now(), text: `Scheduled for ${selectedPlatformForScheduling || item.platform || "instagram"}` }
               ]
             };
 
             console.log(`Uploading campaign ${item.id} to Google Drive...`);
-            const driveResponse = await fetch("http://localhost:8000/google-drive/save-campaign", {
+            const driveResponse = await apiFetch("/google-drive/save-campaign", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(campaignData)
@@ -363,20 +403,45 @@ function MyCampaigns() {
 
       setSchedulingProgress(prev => ({ ...prev, progress: 60, currentStep: 2 }));
 
-      // Step 3: Create calendar events for each scheduled item
-      for (let i = 0; i < draftItems.length; i++) {
-        const item = draftItems[i];
+      // Refresh campaigns from database to ensure we have the latest IDs before creating calendar events
+      console.log('🔄 Refreshing campaigns from database before calendar event creation...');
+      await loadCampaignsFromDB();
+
+      // Get fresh campaigns after reload
+      const { campaigns: freshCampaigns } = useCampaignStore.getState();
+      const refreshedCampaigns = freshCampaigns.filter((c) =>
+        batchId === "single" ? !c.batchId : c.batchId === batchId
+      );
+      console.log(`📊 Refreshed ${refreshedCampaigns.length} campaigns for calendar events`);
+
+      // Step 3: Create calendar events for each scheduled item (using refreshed data)
+      for (let i = 0; i < refreshedCampaigns.length; i++) {
+        const item = refreshedCampaigns[i];
         try {
+          // Ensure we use the actual database ID, not temporary frontend ID
+          const actualPostId = String(item.id);
+
+          // Get the batch ID this item belongs to
+          const itemBatchId = item.batchId || "single";
+
           const eventData = {
-            title: `📱 Post: ${item.productDescription?.substring(0, 50)}...`,
+            title: `📱 ${item.campaignName || item.productDescription?.substring(0, 50) || 'Post'}`,
             description: item.generatedContent || item.productDescription,
             start_time: dates[i],
             end_time: dates[i], // Point-in-time event matching scheduled time
             color: "#3174ad",
-            post_id: item.id
+            post_id: actualPostId,
+            metadata: {
+              batch_id: itemBatchId,
+              campaign_id: actualPostId,
+              product_description: item.productDescription,
+              created_by: "batch_scheduler"
+            }
           };
 
-          const response = await fetch("http://localhost:8000/api/calendar/events", {
+          console.log(`📅 Creating calendar event for campaign ${actualPostId} (batch: ${itemBatchId}):`, eventData);
+
+          const response = await apiFetch("/api/calendar/events", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(eventData)
@@ -388,10 +453,17 @@ function MyCampaigns() {
               updateCampaign(item.id, {
                 calendarEventId: calendarData.event?.id
               });
-              console.log(`Calendar event created for campaign ${item.id}`);
+              console.log(`✅ Calendar event created for campaign ${actualPostId}:`, {
+                eventId: calendarData.event?.id,
+                postId: actualPostId,
+                title: eventData.title
+              });
+            } else {
+              console.error(`❌ Calendar creation failed for ${actualPostId}:`, calendarData.error);
             }
           } else {
-            console.error(`Failed to create calendar event for ${item.id}`);
+            const errorText = await response.text();
+            console.error(`❌ Failed to create calendar event for ${actualPostId}: ${response.status} - ${errorText}`);
           }
 
           // Also create Google Calendar event if connected
@@ -403,14 +475,13 @@ function MyCampaigns() {
                 generatedContent: item.generatedContent,
                 scheduledAt: dates[i],
                 status: "Scheduled",
-                platforms: selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling : [item.platform || "facebook"],
                 imageUrl: item.imageUrl,
                 driveImageUrl: item.driveImageUrl || item.imageUrl,
                 activity: [{ time: Date.now(), text: "Calendar event created" }]
               };
 
               console.log(`📅 Creating Google Calendar event for ${item.id}...`);
-              const googleCalendarResponse = await fetch("http://localhost:8000/google-calendar/create-event", {
+              const googleCalendarResponse = await apiFetch("/google-calendar/create-event", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(googleCalendarData)
@@ -441,7 +512,7 @@ function MyCampaigns() {
         }
 
         // Update progress
-        const progress = 60 + ((i + 1) / draftItems.length) * 40;
+        const progress = 60 + ((i + 1) / refreshedCampaigns.length) * 40;
         setSchedulingProgress(prev => ({ ...prev, progress }));
       }
 
@@ -453,8 +524,8 @@ function MyCampaigns() {
       await fetchCalendarEvents();
 
       const successMessage = googleConnected
-        ? `Scheduled ${draftItems.length} draft posts, uploaded to Google Drive, and created calendar events!`
-        : `Scheduled ${draftItems.length} draft posts and created calendar events!`;
+        ? `Scheduled ${refreshedCampaigns.length} posts, uploaded to Google Drive, and created calendar events!`
+        : `Scheduled ${refreshedCampaigns.length} posts and created calendar events!`;
 
       toast.success(successMessage);
 
@@ -472,7 +543,7 @@ function MyCampaigns() {
   // Calendar event handlers
   const handleCalendarEventCreate = async (eventData) => {
     try {
-      const response = await fetch("http://localhost:8000/api/calendar/events", {
+      const response = await apiFetch("/api/calendar/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(eventData)
@@ -491,7 +562,7 @@ function MyCampaigns() {
 
   const handleCalendarEventUpdate = async (eventId, updateData) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/calendar/events/${eventId}`, {
+      const response = await apiFetch(`/api/calendar/events/${eventId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updateData)
@@ -510,7 +581,7 @@ function MyCampaigns() {
 
   const handleCalendarEventDelete = async (eventId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/calendar/events/${eventId}`, {
+      const response = await apiFetch(`/api/calendar/events/${eventId}`, {
         method: "DELETE"
       });
 
@@ -572,9 +643,19 @@ function MyCampaigns() {
             const posted = b.items.filter((x) => x.status === "Posted").length;
             const failed = b.items.filter((x) => x.status === "Failed").length;
             const sample = b.items[0];
-            const name = sample?.productDescription || "Untitled Campaign";
+            const name = sample?.campaignName || sample?.productDescription || "Untitled Campaign";
             const draft = b.items.filter((x) => x.status === "Draft").length;
-            const schedulingStatus = scheduled > 0 ? "Scheduled" : draft > 0 ? "Draft" : "Empty";
+            // More descriptive status logic
+            let schedulingStatus;
+            if (scheduled > 0 && draft > 0) {
+              schedulingStatus = "Partially Scheduled";
+            } else if (scheduled > 0) {
+              schedulingStatus = "Scheduled";
+            } else if (draft > 0) {
+              schedulingStatus = "Draft";
+            } else {
+              schedulingStatus = "Empty";
+            }
             return (
               <div
                 key={b.id}
@@ -587,14 +668,18 @@ function MyCampaigns() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <Badge color={schedulingStatus === "Scheduled" ? "green" : schedulingStatus === "Draft" ? "yellow" : "gray"}>
+                  <Badge color={
+                    schedulingStatus === "Scheduled" ? "green" :
+                      schedulingStatus === "Partially Scheduled" ? "blue" :
+                        schedulingStatus === "Draft" ? "yellow" : "gray"
+                  }>
                     {schedulingStatus}
                   </Badge>
-                  {/* Always show Schedule button - blue for drafts, gray for scheduled */}
-                  {draft > 0 ? (
-                    // Blue Schedule button for campaigns with drafts
+                  {/* Show Schedule button only if there are drafts AND no scheduled posts */}
+                  {draft > 0 && scheduled === 0 ? (
+                    // Blue Schedule button for campaigns with only drafts
                     <button
-                      onClick={() => openPlatformScheduleModal(b)}
+                      onClick={() => setPlatformScheduleModal(b)}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md border border-blue-600 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
                     >
                       <svg
@@ -610,8 +695,8 @@ function MyCampaigns() {
                       </svg>
                       Schedule
                     </button>
-                  ) : (
-                    // Gray Scheduled button for campaigns that are already scheduled
+                  ) : scheduled > 0 ? (
+                    // Gray Scheduled button for campaigns that have any scheduled posts
                     <button
                       disabled
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md border border-gray-200 shadow-sm cursor-default"
@@ -629,7 +714,7 @@ function MyCampaigns() {
                       </svg>
                       Scheduled
                     </button>
-                  )}
+                  ) : null}
                   <IconButton title="View" onClick={() => setViewBatchId(b.id)}>
                     {/* eye icon */}
                     <svg
@@ -670,7 +755,7 @@ function MyCampaigns() {
                   <IconButton
                     title="Delete"
                     variant="danger"
-                    onClick={() => deleteBatch(b.id)}
+                    onClick={() => setDeleteBatchConfirm(b)}
                   >
                     {/* trash icon */}
                     <svg
@@ -704,7 +789,7 @@ function MyCampaigns() {
         open={!!viewBatchId}
         onOpenChange={(open) => !open && setViewBatchId(null)}
       >
-        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden">
+        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[95vw] max-w-6xl max-height-[90vh] overflow-hidden">
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <h2 className="text-xl font-semibold text-gray-900">Batch Details</h2>
             <IconButton title="Close" onClick={() => setViewBatchId(null)}>
@@ -763,7 +848,7 @@ function MyCampaigns() {
                           </div>
                         </div>
                         <div className="text-sm font-medium text-gray-900 line-clamp-2">
-                          {c.productDescription}
+                          {c.campaignName || c.productDescription}
                         </div>
                         {c.generatedContent && (
                           <div className="text-xs text-gray-600 line-clamp-3 leading-relaxed">
@@ -774,6 +859,58 @@ function MyCampaigns() {
                     </div>
                   ))}
               </div>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        open={!!deleteBatchConfirm}
+        onOpenChange={(open) => !open && setDeleteBatchConfirm(null)}
+      >
+        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[90vw] max-w-md">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Delete Campaigns</h2>
+            <IconButton title="Close" onClick={() => setDeleteBatchConfirm(null)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </IconButton>
+          </div>
+          <div className="p-6 space-y-4">
+            {deleteBatchConfirm && (
+              <>
+                <p className="text-sm text-gray-700">
+                  You are about to remove <strong>{(deleteBatchConfirm.items || []).length}</strong> post(s) from <strong>{deleteBatchConfirm.items?.[0]?.campaignName || deleteBatchConfirm.items?.[0]?.productDescription || 'this campaign'}</strong>.
+                </p>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                  Choose "Save as Draft" to keep the posts but unschedule them, or "Delete Permanently" to remove them.
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="secondary" onClick={() => setDeleteBatchConfirm(null)} size="sm">Cancel</Button>
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      const id = deleteBatchConfirm.id;
+                      setDeleteBatchConfirm(null);
+                      await saveBatchAsDraft(id);
+                    }}
+                    size="sm"
+                  >
+                    Save as Draft
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={async () => {
+                      const id = deleteBatchConfirm.id;
+                      setDeleteBatchConfirm(null);
+                      await deleteBatch(id);
+                    }}
+                    size="sm"
+                  >
+                    Delete Permanently
+                  </Button>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -819,7 +956,11 @@ function MyCampaigns() {
               Calendar - {campaigns.find(c =>
                 batchCalendarView === "single"
                   ? !c.batchId
-                  : c.batchId === batchCalendarView
+                  : (c.batchId === batchCalendarView || c.id === batchCalendarView)
+              )?.campaignName || campaigns.find(c =>
+                batchCalendarView === "single"
+                  ? !c.batchId
+                  : (c.batchId === batchCalendarView || c.id === batchCalendarView)
               )?.productDescription || "Batch"}
             </h2>
             <IconButton title="Close" onClick={() => setBatchCalendarView(null)}>
@@ -842,16 +983,110 @@ function MyCampaigns() {
           <div className="p-6 h-[calc(90vh-120px)]">
             {batchCalendarView && (
               <Calendar
-                events={allCalendarEvents.filter(event => {
-                  // Filter events to only show those from this batch
-                  const batchCampaigns = campaigns.filter(c =>
-                    batchCalendarView === "single"
-                      ? !c.batchId
-                      : c.batchId === batchCalendarView
-                  );
-                  const batchCampaignIds = batchCampaigns.map(c => c.id);
-                  return batchCampaignIds.includes(event.post_id);
-                })}
+                events={(() => {
+                  console.log(`🔍 STARTING CALENDAR FILTER FOR BATCH: ${batchCalendarView}`);
+
+                  // Get campaigns for this specific batch or individual campaign
+                  const batchCampaigns = campaigns.filter(c => {
+                    if (batchCalendarView === "single") {
+                      return !c.batchId || c.batchId === null || c.batchId === undefined;
+                    } else {
+                      // Check if batchCalendarView is a batchId or individual campaign ID
+                      return c.batchId === batchCalendarView || c.id === batchCalendarView;
+                    }
+                  });
+
+                  console.log(`📊 Found ${batchCampaigns.length} campaigns in this batch:`);
+                  batchCampaigns.forEach(c => {
+                    console.log(`  - Campaign ID: ${c.id}, Desc: "${c.productDescription}", BatchId: ${c.batchId}`);
+                  });
+
+                  if (batchCampaigns.length === 0) {
+                    console.log(`⚠️ No campaigns found for batch ${batchCalendarView}`);
+                    return [];
+                  }
+
+                  // Create comprehensive matching strategies
+                  const batchCampaignIds = new Set();
+                  const batchDescriptions = new Set();
+
+                  batchCampaigns.forEach(c => {
+                    // Add various ID formats
+                    batchCampaignIds.add(String(c.id));
+                    batchCampaignIds.add(c.id); // Original format
+                    if (c.id && typeof c.id === 'number') {
+                      batchCampaignIds.add(c.id.toString());
+                    }
+
+                    // Add description for content matching
+                    if (c.productDescription) {
+                      batchDescriptions.add(c.productDescription.toLowerCase().trim());
+                    }
+                  });
+
+                  console.log(`🎯 Campaign IDs to match:`, Array.from(batchCampaignIds));
+                  console.log(`📝 Descriptions to match:`, Array.from(batchDescriptions));
+                  console.log(`📅 Total calendar events to filter:`, allCalendarEvents.length);
+
+                  // Enhanced filtering with multiple strategies
+                  const filteredEvents = allCalendarEvents.filter(event => {
+                    const eventPostId = event.post_id;
+                    const eventPostIdStr = String(eventPostId || '');
+                    const eventTitle = (event.title || '').toLowerCase();
+
+                    // Strategy 1: Direct ID matching (multiple formats)
+                    const directMatch = batchCampaignIds.has(eventPostId) ||
+                      batchCampaignIds.has(eventPostIdStr) ||
+                      batchCampaignIds.has(Number(eventPostId));
+
+                    // Strategy 2: Title content matching
+                    let contentMatch = false;
+                    if (!directMatch) {
+                      for (const desc of batchDescriptions) {
+                        if (desc && eventTitle.includes(desc.substring(0, 15))) {
+                          contentMatch = true;
+                          break;
+                        }
+                      }
+                    }
+
+                    // Strategy 3: Batch ID embedded in event metadata
+                    let metadataMatch = false;
+                    if (!directMatch && !contentMatch && event.metadata) {
+                      metadataMatch = event.metadata.batch_id === batchCalendarView;
+                    }
+
+                    const isMatch = directMatch || contentMatch || metadataMatch;
+
+                    console.log(`🔍 Event: "${event.title}" | post_id: ${eventPostId} | Match: ${isMatch} (direct: ${directMatch}, content: ${contentMatch}, metadata: ${metadataMatch})`);
+
+                    return isMatch;
+                  });
+
+                  console.log(`✅ FILTERED ${filteredEvents.length} events for batch ${batchCalendarView}`);
+                  if (filteredEvents.length > 0) {
+                    console.log(`📋 Filtered events:`);
+                    filteredEvents.forEach(e => console.log(`   - "${e.title}" (post_id: ${e.post_id})`));
+                  } else {
+                    console.log(`❌ NO EVENTS MATCHED - This might be why you're seeing all events`);
+                    console.log(`🔧 Troubleshooting:`);
+                    console.log(`   - Check if calendar events have correct post_id`);
+                    console.log(`   - Verify campaign IDs match event post_ids`);
+                    console.log(`   - Ensure batch assignment is correct`);
+                  }
+                  console.log(`🏁 END FILTER\n`);
+
+                  // FAILSAFE: Prevent showing all events if filtering completely fails
+                  // If we have campaigns in this batch but no matching events, return empty array
+                  // This prevents the common issue of showing all events when filtering fails
+                  if (batchCampaigns.length > 0 && filteredEvents.length === 0) {
+                    console.log(`🛡️ FAILSAFE: No events matched for batch with ${batchCampaigns.length} campaigns`);
+                    console.log(`📝 This prevents showing all events when filtering fails`);
+                    return []; // Return empty array instead of all events
+                  }
+
+                  return filteredEvents;
+                })()}
                 onEventCreate={handleCalendarEventCreate}
                 onEventUpdate={handleCalendarEventUpdate}
                 onEventDelete={handleCalendarEventDelete}
@@ -867,14 +1102,14 @@ function MyCampaigns() {
         </div>
       </Modal>
 
-      {/* Multi-Platform Selection Modal for Scheduling */}
+      {/* Platform Selection Modal for Scheduling */}
       <Modal
         open={!!platformScheduleModal}
         onOpenChange={(open) => !open && setPlatformScheduleModal(null)}
       >
-        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[90vw] max-w-lg">
+        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[90vw] max-w-md">
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Choose Platforms & Schedule</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Choose Platform & Schedule</h2>
             <IconButton title="Close" onClick={() => setPlatformScheduleModal(null)}>
               {/* x icon */}
               <svg
@@ -894,12 +1129,10 @@ function MyCampaigns() {
           </div>
           <div className="p-6">
             {platformScheduleModal && (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-4">Select Platforms *</label>
-
-                  {/* Platform Checkboxes */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Choose Platforms *</label>
+                  <div className="grid grid-cols-2 gap-3 max-w-md">
                     {[
                       { id: "facebook", name: "Facebook", icon: "/icons/facebook.png" },
                       { id: "twitter", name: "X (Twitter)", icon: "/icons/x.png" },
@@ -908,14 +1141,17 @@ function MyCampaigns() {
                       <label
                         key={platform.id}
                         className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${selectedPlatformsForScheduling.includes(platform.id)
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-300 hover:border-gray-400"
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-300 hover:border-gray-400"
                           }`}
                       >
                         <input
                           type="checkbox"
                           checked={selectedPlatformsForScheduling.includes(platform.id)}
-                          onChange={() => handlePlatformToggleForScheduling(platform.id)}
+                          onChange={(e) => {
+                            console.log(`Checkbox clicked for ${platform.id}, checked: ${e.target.checked}`);
+                            handlePlatformToggle(platform.id);
+                          }}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
                         <img src={platform.icon} alt={platform.name} className="w-5 h-5" />
@@ -923,66 +1159,13 @@ function MyCampaigns() {
                       </label>
                     ))}
                   </div>
-
-                  {/* Subreddit input for Reddit posts */}
-                  {selectedPlatformsForScheduling.includes("reddit") && (
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit *</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={subredditForScheduling}
-                          onChange={(e) => setSubredditForScheduling(e.target.value)}
-                          placeholder="e.g., funny, technology"
-                          className="pl-8 pr-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
-                          required
-                        />
-                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                          <span className="text-gray-500 text-sm">r/</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-600 mt-1">
-                        Enter the subreddit name without "r/" prefix
-                      </p>
-                    </div>
-                  )}
                 </div>
-
-                {/* Status Message */}
-                {selectedPlatformsForScheduling.length > 0 ? (
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-800">
-                      {platformScheduleModal.items.filter(x => x.status === "Draft").length} draft posts will be scheduled for:
-                    </p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {selectedPlatformsForScheduling.map((platform) => (
-                        <span
-                          key={platform}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
-                        >
-                          <img
-                            src={`/icons/${platform === 'twitter' ? 'x' : platform}.png`}
-                            alt={platform}
-                            className="w-3 h-3"
-                          />
-                          {platform === 'twitter' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1)}
-                        </span>
-                      ))}
-                      {selectedPlatformsForScheduling.includes("reddit") && subredditForScheduling && (
-                        <span className="text-xs text-blue-600">
-                          in r/{subredditForScheduling}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-sm text-yellow-800">
-                      Please select at least one platform before scheduling.
-                    </p>
-                  </div>
-                )}
-
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Campaign:</strong> {platformScheduleModal.items[0]?.campaignName || platformScheduleModal.items[0]?.productDescription || "Untitled"}<br />
+                    <strong>Posts:</strong> {platformScheduleModal.items.filter(x => x.status === "Draft").length} draft posts will be scheduled for <strong>{selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling.join(", ") : "no platforms selected"}</strong>
+                  </p>
+                </div>
                 <div className="flex justify-end gap-3 pt-4">
                   <Button
                     variant="secondary"
@@ -994,11 +1177,7 @@ function MyCampaigns() {
                   <Button
                     onClick={() => {
                       if (selectedPlatformsForScheduling.length === 0) {
-                        toast.error("Please select at least one platform before scheduling");
-                        return;
-                      }
-                      if (selectedPlatformsForScheduling.includes("reddit") && !subredditForScheduling.trim()) {
-                        toast.error("Please enter a subreddit for Reddit posts");
+                        toast.error("Please select at least one platform");
                         return;
                       }
                       const batch = platformScheduleModal;

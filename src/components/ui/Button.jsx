@@ -1,27 +1,33 @@
 import clsx from "clsx";
 
-function Button({ variant = "primary", size = "md", className, ...props }) {
+function Button({ variant = "primary", size = "md", className, children, ...props }) {
   const variants = {
-    primary: "bg-blue-600 text-white hover:bg-blue-700",
-    secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200",
-    danger: "bg-red-600 text-white hover:bg-red-700",
-    ghost: "bg-transparent text-gray-700 hover:bg-gray-100",
+    primary: "bg-[var(--primary)] text-[var(--primary-foreground)]",
+    secondary: "bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]",
+    gradient: "bg-gradient-to-r from-gradient-primary-start to-gradient-primary-end text-white",
+    ghost: "bg-transparent text-[var(--text)] border border-[var(--border)]",
+    destructive: "bg-[var(--danger)] text-white",
+    success: "bg-green-600 text-white",
   };
+
   const sizes = {
-    sm: "px-2.5 py-1.5 text-sm",
-    md: "px-3.5 py-2 text-sm",
-    lg: "px-4.5 py-2.5 text-base",
+    sm: "h-9 px-4 text-sm rounded-md",
+    md: "h-11 px-5 text-base rounded-lg",
+    lg: "h-12 px-6 text-lg rounded-lg",
   };
+
   return (
     <button
       className={clsx(
-        "rounded-md font-medium transition-colors border border-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400",
+        "font-semibold transition-all duration-300 focus-visible-ring active:scale-95",
         variants[variant],
         sizes[size],
         className
       )}
       {...props}
-    />
+    >
+      {children}
+    </button>
   );
 }
 

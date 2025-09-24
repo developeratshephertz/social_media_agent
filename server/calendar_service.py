@@ -209,10 +209,11 @@ class CalendarService:
             if not post:
                 raise ValueError(f"Post {post_id} not found")
             
-            # Create event data from post
+            # Create event data from post - use campaign name if available for basic mode posts
+            event_title = post.campaign_name if post.campaign_name else f"Post: {post.original_description[:50]}..."
             event_data = {
                 'post_id': post_id,
-                'title': f"Post: {post.original_description[:50]}...",
+                'title': event_title,
                 'description': post.caption or post.original_description,
                 'start_time': post.scheduled_at or datetime.now(),
                 'status': 'scheduled' if post.status == 'scheduled' else 'draft',

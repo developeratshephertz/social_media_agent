@@ -34,6 +34,7 @@ CREATE TABLE posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
     batch_id UUID REFERENCES batch_operations(id) ON DELETE SET NULL,
+    campaign_name TEXT, -- Campaign name for display purposes
     original_description TEXT NOT NULL,
     caption TEXT,
     image_path VARCHAR(500),
