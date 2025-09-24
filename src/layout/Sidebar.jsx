@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import clsx from "clsx";
 import ThemeToggle from "../components/ThemeToggle.jsx";
-import UserProfile from "../components/ui/UserProfile.jsx";
+import UserMenu from "../components/UserMenu.jsx";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: "home" },
@@ -190,7 +190,7 @@ function Sidebar() {
 
       {/* User Profile Section - Bottom of Sidebar */}
       <div className="p-4 border-t border-white/20">
-        <UserProfile />
+        <UserMenu />
       </div>
     </aside>
   );

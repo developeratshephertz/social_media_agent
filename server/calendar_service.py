@@ -95,7 +95,8 @@ class CalendarService:
                    start_date: Optional[datetime] = None,
                    end_date: Optional[datetime] = None,
                    status: Optional[str] = None,
-                   post_id: Optional[str] = None) -> List[CalendarEventResponse]:
+                   post_id: Optional[str] = None,
+                   user_id: Optional[str] = None) -> List[CalendarEventResponse]:
         """Get calendar events with optional filtering"""
         try:
             query = self.db.query(CalendarEvent)
@@ -121,6 +122,9 @@ class CalendarService:
                 
             if post_id:
                 filters.append(CalendarEvent.post_id == uuid.UUID(post_id))
+            
+            if user_id:
+                filters.append(CalendarEvent.user_id == uuid.UUID(user_id))
             
             if filters:
                 query = query.filter(and_(*filters))

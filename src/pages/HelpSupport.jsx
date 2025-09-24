@@ -36,80 +36,88 @@ export default function HelpSupport() {
   };
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Help & Support</h1>
-      <p className="text-gray-600 mb-8">
-        Welcome to the Help Center! Browse the FAQs below or contact support if
-        you need further assistance.
-      </p>
-
-      {/* FAQ Section */}
-      <div className="space-y-4 mb-10">
-        {faqs.map((faq, index) => (
-          <div key={index} className="border rounded-lg shadow-sm bg-white">
-            <button
-              className="w-full flex justify-between items-center p-4 text-left"
-              onClick={() => toggleFAQ(index)}
-            >
-              <span className="font-medium">{faq.question}</span>
-              <span>{activeIndex === index ? "−" : "+"}</span>
-            </button>
-            {activeIndex === index && (
-              <div className="p-4 text-gray-600 border-t">{faq.answer}</div>
-            )}
-          </div>
-        ))}
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-semibold">Help & Support</h1>
+          <p className="text-sm text-[var(--text-muted)] mt-1">
+            Welcome to the Help Center! Browse the FAQs below or contact support if you need further assistance.
+          </p>
+        </div>
       </div>
+      
+      <div className="max-w-3xl mx-auto space-y-8">
 
-      {/* Contact Form */}
-      <h2 className="text-2xl font-semibold mb-4">Contact Support</h2>
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-4 bg-white p-6 rounded-lg shadow"
-      >
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-1">
-            Your Name
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            placeholder="John Doe"
-            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
-          />
+        {/* FAQ Section */}
+        <div className="space-y-4">
+          {faqs.map((faq, index) => (
+            <div key={index} className="border border-[var(--border)] rounded-lg shadow-sm bg-[var(--surface)]">
+              <button
+                className="w-full flex justify-between items-center p-4 text-left"
+                onClick={() => toggleFAQ(index)}
+              >
+                <span className="font-medium text-[var(--text)]">{faq.question}</span>
+                <span className="text-[var(--text)]">{activeIndex === index ? "−" : "+"}</span>
+              </button>
+              {activeIndex === index && (
+                <div className="p-4 text-[var(--text-muted)] border-t border-[var(--border)]">{faq.answer}</div>
+              )}
+            </div>
+          ))}
         </div>
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium mb-1">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            placeholder="you@example.com"
-            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
-          />
+
+        {/* Contact Form */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-[var(--text)]">Contact Support</h2>
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4 bg-[var(--surface)] p-6 rounded-lg shadow border border-[var(--border)]"
+          >
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium mb-1 text-[var(--text)]">
+                Your Name
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                placeholder="John Doe"
+                className="w-full border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium mb-1 text-[var(--text)]">
+                Email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="you@example.com"
+                className="w-full border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label htmlFor="message" className="block text-sm font-medium mb-1 text-[var(--text)]">
+                Message
+              </label>
+              <textarea
+                id="message"
+                name="message"
+                rows="4"
+                placeholder="How can we help you?"
+                className="w-full border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--surface)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition-all resize-none"
+              ></textarea>
+            </div>
+            <button
+              type="submit"
+              className="bg-[var(--primary)] text-white px-4 py-2 rounded-lg hover:bg-[var(--primary)]/90 transition-colors font-medium"
+            >
+              Submit
+            </button>
+          </form>
         </div>
-        <div>
-          <label htmlFor="message" className="block text-sm font-medium mb-1">
-            Message
-          </label>
-          <textarea
-            id="message"
-            name="message"
-            rows="4"
-            placeholder="How can we help you?"
-            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
-          ></textarea>
-        </div>
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          Submit
-        </button>
-      </form>
+      </div>
     </div>
   );
 }

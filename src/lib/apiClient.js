@@ -23,18 +23,34 @@ async function handleResponse(response) {
 
 // Post generation endpoints
 export async function generatePost({ description, caption_provider, image_provider, platforms, subreddit } = {}) {
+  const token = localStorage.getItem('auth-storage');
+  const authData = token ? JSON.parse(token) : null;
+  const headers = { "Content-Type": "application/json" };
+
+  if (authData?.state?.token) {
+    headers['Authorization'] = `Bearer ${authData.state.token}`;
+  }
+
   const res = await apiFetch("/generate-post", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ description, caption_provider, image_provider, platforms, subreddit }),
   });
   return handleResponse(res);
 }
 
 export async function generateBatch({ description, days, num_posts, caption_provider, image_provider, platforms, subreddit, campaign_name } = {}) {
+  const token = localStorage.getItem('auth-storage');
+  const authData = token ? JSON.parse(token) : null;
+  const headers = { "Content-Type": "application/json" };
+
+  if (authData?.state?.token) {
+    headers['Authorization'] = `Bearer ${authData.state.token}`;
+  }
+
   const res = await apiFetch("/generate-batch", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ description, days, num_posts, caption_provider, image_provider, platforms, subreddit, campaign_name }),
   });
   return handleResponse(res);
@@ -69,7 +85,17 @@ export async function createBatch({ description, days, num_posts, campaign_name 
 
 // Posts / campaigns
 export async function getPosts({ limit = 50 } = {}) {
-  const res = await apiFetch(`/api/posts?limit=${encodeURIComponent(limit)}`);
+  const token = localStorage.getItem('auth-storage');
+  const authData = token ? JSON.parse(token) : null;
+  const headers = {};
+
+  if (authData?.state?.token) {
+    headers['Authorization'] = `Bearer ${authData.state.token}`;
+  }
+
+  const res = await apiFetch(`/api/posts?limit=${encodeURIComponent(limit)}`, {
+    headers
+  });
   return handleResponse(res);
 }
 
@@ -112,8 +138,18 @@ export async function uploadCustomImage({ data_url, description } = {}) {
 
 // Calendar
 export async function getCalendarEvents(params = {}) {
+  const token = localStorage.getItem('auth-storage');
+  const authData = token ? JSON.parse(token) : null;
+  const headers = {};
+
+  if (authData?.state?.token) {
+    headers['Authorization'] = `Bearer ${authData.state.token}`;
+  }
+
   const qs = new URLSearchParams(params).toString();
-  const res = await apiFetch(`/api/calendar/events${qs ? `?${qs}` : ""}`);
+  const res = await apiFetch(`/api/calendar/events${qs ? `?${qs}` : ""}`, {
+    headers
+  });
   return handleResponse(res);
 }
 
@@ -193,12 +229,32 @@ export async function getHero() {
 }
 
 export async function getScheduledPosts() {
-  const res = await apiFetch(`/api/scheduled-posts`);
+  const token = localStorage.getItem('auth-storage');
+  const authData = token ? JSON.parse(token) : null;
+  const headers = {};
+
+  if (authData?.state?.token) {
+    headers['Authorization'] = `Bearer ${authData.state.token}`;
+  }
+
+  const res = await apiFetch(`/api/scheduled-posts`, {
+    headers
+  });
   return handleResponse(res);
 }
 
 export async function getAllPosts({ limit = 50 } = {}) {
-  const res = await apiFetch(`/api/posts?limit=${encodeURIComponent(limit)}`);
+  const token = localStorage.getItem('auth-storage');
+  const authData = token ? JSON.parse(token) : null;
+  const headers = {};
+
+  if (authData?.state?.token) {
+    headers['Authorization'] = `Bearer ${authData.state.token}`;
+  }
+
+  const res = await apiFetch(`/api/posts?limit=${encodeURIComponent(limit)}`, {
+    headers
+  });
   return handleResponse(res);
 }
 
@@ -225,6 +281,23 @@ export async function generateScheduleDates({ num_posts, days } = {}) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ num_posts, days }),
+  });
+  return handleResponse(res);
+}
+
+// Authentication endpoints
+export async function deleteAccount() {
+  const token = localStorage.getItem('auth-storage');
+  const authData = token ? JSON.parse(token) : null;
+  const headers = { "Content-Type": "application/json" };
+
+  if (authData?.state?.token) {
+    headers['Authorization'] = `Bearer ${authData.state.token}`;
+  }
+
+  const res = await apiFetch("/auth/delete-account", {
+    method: "DELETE",
+    headers
   });
   return handleResponse(res);
 }
@@ -259,6 +332,7 @@ export default {
   getTrendingTopics,
   refreshTrendingTopics,
   generateScheduleDates,
+  deleteAccount,
 };
 
 

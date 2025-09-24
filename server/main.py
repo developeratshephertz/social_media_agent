@@ -79,6 +79,17 @@ app.include_router(google_router)
 from social_media_routes import router as social_media_router
 app.include_router(social_media_router)
 
+# Include authentication routes
+from auth_routes import router as auth_router
+app.include_router(auth_router)
+
+# Include idea generator routes
+from idea_generator_routes import router as idea_generator_router
+app.include_router(idea_generator_router)
+
+# Import auth dependency after router is included
+from auth_routes import get_current_user_dependency
+
 # Lifespan events are now handled in the lifespan context manager above
 
 # API Keys
@@ -588,7 +599,7 @@ async def health():
 
 
 @app.post("/generate-post", response_model=PostResponse)
-async def generate_post(request: PostRequest):
+async def generate_post(request: PostRequest, current_user = Depends(get_current_user_dependency)):
     """Generate Instagram post with image and caption"""
     try:
         if not request.description or len(request.description.strip()) < 3:
@@ -622,7 +633,8 @@ async def generate_post(request: PostRequest):
                 image_path=image_path,
                 campaign_id=default_campaign_id,
                 platforms=request.platforms,
-                subreddit=request.subreddit
+                subreddit=request.subreddit,
+                user_id=str(current_user.id)
             )
             
             # Save image information
@@ -891,7 +903,7 @@ def _compute_schedule_dates(num_posts: int, days: int) -> List[str]:
 
 
 @app.post("/generate-batch", response_model=BatchResponse)
-async def generate_batch(request: BatchRequest):
+async def generate_batch(request: BatchRequest, current_user = Depends(get_current_user_dependency)):
     """Generate multiple posts and return caption, image path, and scheduled time for each."""
     import time
     request_id = int(time.time() * 1000) % 10000
@@ -921,7 +933,7 @@ async def generate_batch(request: BatchRequest):
                 description=description,
                 num_posts=request.num_posts,
                 days_duration=request.days,
-                created_by="api_user"  # Could be enhanced with proper user management
+                created_by=str(current_user.id)
             )
             print(f"Created batch operation with ID: {batch_id}")
         except Exception as db_error:
@@ -996,7 +1008,8 @@ async def generate_batch(request: BatchRequest):
                         campaign_id=default_campaign_id,
                         platforms=None,  # Platforms will be set when user selects them
                         status="draft",  # Explicitly set as draft
-                        batch_id=batch_id
+                        batch_id=batch_id,
+                        user_id=str(current_user.id)
                     )
                     
                     # Save image information
@@ -1132,10 +1145,10 @@ async def create_post(post_data: dict):
         return {"success": False, "error": str(e)}
 
 @app.get("/api/posts")
-async def get_recent_posts(limit: int = 10):
+async def get_recent_posts(limit: int = 10, current_user = Depends(get_current_user_dependency)):
     """Get recent posts from database"""
     try:
-        posts = await db_service.get_recent_posts(limit=limit)
+        posts = await db_service.get_recent_posts(limit=limit, user_id=str(current_user.id))
         return {"success": True, "posts": posts}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -1232,10 +1245,10 @@ async def clear_all_posts():
 
 
 @app.get("/api/scheduled-posts")
-async def get_scheduled_posts():
+async def get_scheduled_posts(current_user = Depends(get_current_user_dependency)):
     """Get posts that are scheduled for posting"""
     try:
-        posts = await db_service.get_scheduled_posts()
+        posts = await db_service.get_scheduled_posts(user_id=str(current_user.id))
         return {"success": True, "scheduled_posts": posts}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -1392,7 +1405,8 @@ async def get_calendar_events(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     status: Optional[str] = None,
-    post_id: Optional[str] = None
+    post_id: Optional[str] = None,
+    current_user = Depends(get_current_user_dependency)
 ):
     """Get calendar events with optional filtering"""
     try:
@@ -1411,7 +1425,8 @@ async def get_calendar_events(
             start_date=parsed_start_date,
             end_date=parsed_end_date,
             status=status,
-            post_id=post_id
+            post_id=post_id,
+            user_id=str(current_user.id)
         )
         
         return {"success": True, "events": [event.dict() for event in events]}

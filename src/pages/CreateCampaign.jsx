@@ -219,6 +219,52 @@ function CreateCampaign() {
     }
   }, [location.state]);
 
+  // Handle pre-filled data from Idea Generator
+  useEffect(() => {
+    const prefilledData = localStorage.getItem('prefilledCampaignData');
+    if (prefilledData) {
+      try {
+        const data = JSON.parse(prefilledData);
+        console.log('🎯 Loading prefilled campaign data from Idea Generator:', data);
+        
+        if (data.prefilled_from_idea) {
+          // Set campaign basic info
+          setCampaignName(data.campaign_name || '');
+          setDescription(data.description || '');
+          
+          // Set suggested campaign parameters
+          setDays(String(data.suggested_days || 7));
+          setNumPosts(String(data.suggested_posts || 5));
+          
+          // Set platforms if available
+          if (data.platforms && data.platforms.length > 0) {
+            // Map platforms to our format
+            const platformMap = {
+              'Facebook': 'facebook',
+              'Twitter/X': 'twitter', 
+              'Reddit': 'reddit',
+              'facebook': 'facebook',
+              'twitter': 'twitter',
+              'reddit': 'reddit'
+            };
+            
+            const mappedPlatforms = data.platforms.map(p => platformMap[p] || p.toLowerCase()).filter(Boolean);
+            setSelectedPlatforms(mappedPlatforms);
+          }
+          
+          // Show success message
+          toast.success(`✨ Campaign details loaded from "${data.campaign_name}" idea!`);
+          
+          // Clear the localStorage to prevent re-triggering
+          localStorage.removeItem('prefilledCampaignData');
+        }
+      } catch (error) {
+        console.error('Error loading prefilled campaign data:', error);
+        localStorage.removeItem('prefilledCampaignData');
+      }
+    }
+  }, []); // Run only once on component mount
+
   // Load available providers from backend health endpoint
   useEffect(() => {
     let mounted = true;
