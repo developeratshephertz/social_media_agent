@@ -28,7 +28,7 @@ export const useCampaignStore = create((set, get) => ({
           id: post.id,
           batchId: post.batch_id || null,
           createdAt: new Date(post.created_at).getTime(),
-          campaignName: post.campaign_name || campaignNames[post.id] || "",
+          campaignName: post.campaign_name || post.campaign_table_name || campaignNames[post.id] || "Untitled Campaign",
           productDescription: post.original_description,
           generatedContent: post.caption || "",
           scheduledAt: post.scheduled_at,

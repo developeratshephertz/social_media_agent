@@ -32,7 +32,8 @@ class DatabaseService:
         platforms: List[str] = None,
         subreddit: str = None,
         status: str = None,
-        batch_id: str = None
+        batch_id: str = None,
+        user_id: str = None
     ) -> str:
         """Create a new post and return its ID"""
         try:
@@ -43,17 +44,18 @@ class DatabaseService:
             
             # Insert post with campaign_name (will work if column exists, ignore if not)
             try:
-                # Try with campaign_name first
+                # Try with campaign_name and user_id first
                 query = """
-                    INSERT INTO posts (id, campaign_id, campaign_name, original_description, caption, 
+                    INSERT INTO posts (id, user_id, campaign_id, campaign_name, original_description, caption, 
                                      image_path, scheduled_at, platforms, subreddit, status, batch_id)
-                    VALUES (:id, :campaign_id, :campaign_name, :description, :caption, :image_path, 
+                    VALUES (:id, :user_id, :campaign_id, :campaign_name, :description, :caption, :image_path, 
                            :scheduled_at, :platforms, :subreddit, :status, :batch_id)
                     RETURNING id
                 """
                 post_id = str(uuid.uuid4())
                 values = {
                     "id": post_id,
+                    "user_id": user_id,
                     "campaign_id": campaign_id,
                     "campaign_name": campaign_name or "",
                     "description": original_description,
@@ -66,21 +68,36 @@ class DatabaseService:
                     "batch_id": batch_id
                 }
                 await db_manager.execute_query(query, values)
+                
+                # Create calendar event if post is scheduled
+                if scheduled_at and user_id:
+                    await DatabaseService.create_calendar_event(
+                        post_id=post_id,
+                        user_id=user_id,
+                        title=campaign_name or "Scheduled Post",
+                        description=caption or original_description or "",
+                        start_time=scheduled_at,
+                        end_time=scheduled_at,
+                        status="scheduled",
+                        platforms=platforms or []
+                    )
+                
                 return post_id
             except Exception as e:
                 if "campaign_name" in str(e):
-                    # Fallback to without campaign_name
+                    # Fallback to without campaign_name but with user_id
                     # Campaign name column not found, using fallback
                     query = """
-                        INSERT INTO posts (id, campaign_id, original_description, caption, 
+                        INSERT INTO posts (id, user_id, campaign_id, original_description, caption, 
                                          image_path, scheduled_at, platforms, subreddit, status, batch_id)
-                        VALUES (:id, :campaign_id, :description, :caption, :image_path, 
+                        VALUES (:id, :user_id, :campaign_id, :description, :caption, :image_path, 
                                :scheduled_at, :platforms, :subreddit, :status, :batch_id)
                         RETURNING id
                     """
                     post_id = str(uuid.uuid4())
                     values = {
                         "id": post_id,
+                        "user_id": user_id,
                         "campaign_id": campaign_id,
                         "description": original_description,
                         "caption": caption,
@@ -92,6 +109,20 @@ class DatabaseService:
                         "batch_id": batch_id
                     }
                     await db_manager.execute_query(query, values)
+                    
+                    # Create calendar event if post is scheduled
+                    if scheduled_at and user_id:
+                        await DatabaseService.create_calendar_event(
+                            post_id=post_id,
+                            user_id=user_id,
+                            title=campaign_name or "Scheduled Post",
+                            description=caption or original_description or "",
+                            start_time=scheduled_at,
+                            end_time=scheduled_at,
+                            status="scheduled",
+                            platforms=platforms or []
+                        )
+                    
                     return post_id
                 else:
                     raise e
@@ -356,20 +387,32 @@ class DatabaseService:
             return None
     
     @staticmethod
-    async def get_recent_posts(limit: int = 10) -> List[Dict[str, Any]]:
-        """Get recent posts with basic info"""
+    async def get_recent_posts(limit: int = 10, user_id: str = None) -> List[Dict[str, Any]]:
+        """Get recent posts with basic info, optionally filtered by user"""
         try:
-            query = """
-                SELECT p.id, p.original_description, p.caption, p.image_path,
-                       p.status, p.platforms, p.scheduled_at, p.created_at, p.batch_id,
-                       COALESCE(p.campaign_name, c.name, 'Untitled Campaign') as campaign_name
-                FROM posts p
-                LEFT JOIN campaigns c ON p.campaign_id = c.id
-                ORDER BY p.created_at DESC
-                LIMIT :limit
-            """
-            
-            results = await db_manager.fetch_all(query, {"limit": limit})
+            if user_id:
+                query = """
+                    SELECT p.id, p.original_description, p.caption, p.image_path,
+                           p.status, p.platforms, p.scheduled_at, p.created_at, p.batch_id,
+                           p.campaign_name, c.name as campaign_table_name
+                    FROM posts p
+                    LEFT JOIN campaigns c ON p.campaign_id = c.id
+                    WHERE p.user_id = :user_id
+                    ORDER BY p.created_at DESC
+                    LIMIT :limit
+                """
+                results = await db_manager.fetch_all(query, {"limit": limit, "user_id": user_id})
+            else:
+                query = """
+                    SELECT p.id, p.original_description, p.caption, p.image_path,
+                           p.status, p.platforms, p.scheduled_at, p.created_at, p.batch_id,
+                           p.campaign_name, c.name as campaign_table_name
+                    FROM posts p
+                    LEFT JOIN campaigns c ON p.campaign_id = c.id
+                    ORDER BY p.created_at DESC
+                    LIMIT :limit
+                """
+                results = await db_manager.fetch_all(query, {"limit": limit})
             return [dict(row) for row in results]
             
         except Exception as e:
@@ -377,22 +420,37 @@ class DatabaseService:
             return []
     
     @staticmethod
-    async def get_scheduled_posts() -> List[Dict[str, Any]]:
-        """Get posts scheduled for posting"""
+    async def get_scheduled_posts(user_id: str = None) -> List[Dict[str, Any]]:
+        """Get posts scheduled for posting, optionally filtered by user"""
         try:
-            query = """
-                SELECT p.id, p.original_description, p.caption, p.image_path,
-                       p.scheduled_at, p.platforms, p.subreddit, p.status,
-                       COALESCE(p.campaign_name, c.name, 'Untitled Campaign') as campaign_name
-                FROM posts p
-                LEFT JOIN campaigns c ON p.campaign_id = c.id
-                WHERE p.status = 'scheduled' 
-                  AND p.scheduled_at IS NOT NULL
-                  AND p.scheduled_at <= NOW() + INTERVAL '7 days'
-                ORDER BY p.scheduled_at ASC
-            """
+            if user_id:
+                query = """
+                    SELECT p.id, p.original_description, p.caption, p.image_path,
+                           p.scheduled_at, p.platforms, p.subreddit, p.status,
+                           COALESCE(p.campaign_name, c.name, 'Untitled Campaign') as campaign_name
+                    FROM posts p
+                    LEFT JOIN campaigns c ON p.campaign_id = c.id
+                    WHERE p.status = 'scheduled' 
+                      AND p.scheduled_at IS NOT NULL
+                      AND p.scheduled_at <= NOW() + INTERVAL '7 days'
+                      AND p.user_id = :user_id
+                    ORDER BY p.scheduled_at ASC
+                """
+                results = await db_manager.fetch_all(query, {"user_id": user_id})
+            else:
+                query = """
+                    SELECT p.id, p.original_description, p.caption, p.image_path,
+                           p.scheduled_at, p.platforms, p.subreddit, p.status,
+                           COALESCE(p.campaign_name, c.name, 'Untitled Campaign') as campaign_name
+                    FROM posts p
+                    LEFT JOIN campaigns c ON p.campaign_id = c.id
+                    WHERE p.status = 'scheduled' 
+                      AND p.scheduled_at IS NOT NULL
+                      AND p.scheduled_at <= NOW() + INTERVAL '7 days'
+                    ORDER BY p.scheduled_at ASC
+                """
+                results = await db_manager.fetch_all(query)
             
-            results = await db_manager.fetch_all(query)
             return [dict(row) for row in results]
             
         except Exception as e:
@@ -653,6 +711,53 @@ class DatabaseService:
         except Exception as e:
             print(f"Error clearing all posts: {e}")
             return False
+    
+    @staticmethod
+    async def create_calendar_event(
+        post_id: str,
+        user_id: str,
+        title: str,
+        description: str = "",
+        start_time: datetime = None,
+        end_time: datetime = None,
+        status: str = "scheduled",
+        platforms: List[str] = None
+    ) -> str:
+        """Create a calendar event for a scheduled post"""
+        try:
+            if not start_time:
+                start_time = datetime.now()
+            if not end_time:
+                end_time = start_time
+            
+            event_id = str(uuid.uuid4())
+            query = """
+                INSERT INTO calendar_events (id, post_id, user_id, title, description, 
+                                           start_time, end_time, status, event_metadata)
+                VALUES (:id, :post_id, :user_id, :title, :description, 
+                       :start_time, :end_time, :status, :event_metadata)
+                RETURNING id
+            """
+            
+            values = {
+                "id": event_id,
+                "post_id": post_id,
+                "user_id": user_id,
+                "title": title,
+                "description": description,
+                "start_time": start_time,
+                "end_time": end_time,
+                "status": status,
+                "event_metadata": {"platforms": platforms or []}
+            }
+            
+            await db_manager.execute_query(query, values)
+            print(f"Created calendar event {event_id} for post {post_id}")
+            return event_id
+            
+        except Exception as e:
+            print(f"Error creating calendar event: {e}")
+            raise
 
 
 # Global service instance

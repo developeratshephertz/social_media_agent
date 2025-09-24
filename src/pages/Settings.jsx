@@ -3,8 +3,10 @@ import Button from "../components/ui/Button.jsx";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiFetch, apiUrl } from "../lib/api.js";
+import apiClient from "../lib/apiClient.js";
 import SocialMediaConnectionModal from "../components/ui/SocialMediaConnectionModal.jsx";
 import { Facebook, Twitter, MessageCircle } from "lucide-react";
+import { useAuthStore } from "../store/authStore";
 
 function Settings() {
   const [driveConnected, setDriveConnected] = useState(false);
@@ -13,7 +15,32 @@ function Settings() {
   const [loading, setLoading] = useState(false);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
-  
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const { user, logout } = useAuthStore();
+
+  // Delete account function
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      const response = await apiClient.deleteAccount();
+
+      if (response) {
+        toast.success('Account deleted successfully');
+        logout();
+        window.location.href = '/login';
+      } else {
+        throw new Error('Failed to delete account');
+      }
+    } catch (error) {
+      console.error('Delete account error:', error);
+      toast.error('Failed to delete account. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   // Social media connection states
   const [socialMediaModal, setSocialMediaModal] = useState({ open: false, platform: null });
   const [platformStatus, setPlatformStatus] = useState({
@@ -115,22 +142,22 @@ function Settings() {
   // Social media platform management functions
   const checkAllSocialMediaStatus = async () => {
     const platforms = ['facebook', 'twitter', 'reddit'];
-    
+
     for (const platform of platforms) {
       setPlatformStatus(prev => ({ ...prev, [platform]: { ...prev[platform], checking: true } }));
-      
+
       try {
         const response = await apiFetch(`/social-media/${platform}/status`);
         const data = await response.json();
-        setPlatformStatus(prev => ({ 
-          ...prev, 
-          [platform]: { connected: data.connected, checking: false } 
+        setPlatformStatus(prev => ({
+          ...prev,
+          [platform]: { connected: data.connected, checking: false }
         }));
       } catch (error) {
         console.error(`Failed to check ${platform} status:`, error);
-        setPlatformStatus(prev => ({ 
-          ...prev, 
-          [platform]: { connected: false, checking: false } 
+        setPlatformStatus(prev => ({
+          ...prev,
+          [platform]: { connected: false, checking: false }
         }));
       }
     }
@@ -144,9 +171,9 @@ function Settings() {
     try {
       const response = await apiFetch(`/social-media/${platform}/disconnect`, { method: "POST" });
       if (response.ok) {
-        setPlatformStatus(prev => ({ 
-          ...prev, 
-          [platform]: { ...prev[platform], connected: false } 
+        setPlatformStatus(prev => ({
+          ...prev,
+          [platform]: { ...prev[platform], connected: false }
         }));
         toast.success(`Successfully disconnected from ${platform.charAt(0).toUpperCase() + platform.slice(1)}`);
       }
@@ -165,11 +192,11 @@ function Settings() {
       });
 
       const result = await response.json();
-      
+
       if (response.ok && result.success) {
-        setPlatformStatus(prev => ({ 
-          ...prev, 
-          [platform]: { ...prev[platform], connected: true } 
+        setPlatformStatus(prev => ({
+          ...prev,
+          [platform]: { ...prev[platform], connected: true }
         }));
         toast.success(`Successfully connected to ${platform.charAt(0).toUpperCase() + platform.slice(1)}!`);
       } else {
@@ -218,7 +245,7 @@ function Settings() {
             const config = getSocialMediaPlatformConfig(platform);
             const status = platformStatus[platform];
             const Icon = config.icon;
-            
+
             return (
               <Card key={platform} title={config.name}>
                 <div className="space-y-3">
@@ -413,9 +440,15 @@ function Settings() {
         <Card title="Account">
           <div className="space-y-3">
             <div className="text-sm text-gray-600">
-              User: Alex Johnson (alex@example.com)
+              User: {user?.name || 'User'} ({user?.email || 'user@example.com'})
             </div>
-            <Button variant="danger">Delete account</Button>
+            <Button
+              variant="danger"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete account'}
+            </Button>
           </div>
         </Card>
       </div>
@@ -427,6 +460,37 @@ function Settings() {
         platform={socialMediaModal.platform}
         onSave={handleSaveCredentials}
       />
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Delete Account
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete your account? This action cannot be undone.
+              All your data, campaigns, and posts will be permanently deleted.
+            </p>
+            <div className="flex space-x-3 justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? 'Deleting...' : 'Yes, Delete Account'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
 import AppLayout from "./layout/AppLayout.jsx";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import CreateCampaign from "./pages/CreateCampaign.jsx";
 import MyCampaigns from "./pages/MyCampaigns.jsx";
@@ -15,20 +18,77 @@ function App() {
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
       <ErrorBoundary>
-        <AppLayout>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/create" element={<CreateCampaign />} />
-            <Route path="/campaigns" element={<MyCampaigns />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/idea-generator" element={<IdeaGenerator />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/pricing" element={<Pricing />} />
-            <Route path="/help-support" element={<HelpSupport />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </AppLayout>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+
+          {/* Protected routes */}
+          <Route path="/" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Navigate to="/dashboard" replace />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/create" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <CreateCampaign />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/campaigns" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <MyCampaigns />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Analytics />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/idea-generator" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <IdeaGenerator />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/pricing" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Pricing />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/help-support" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <HelpSupport />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
       </ErrorBoundary>
     </div>
   );

@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import PageHeader from "../components/layout/PageHeader.jsx";
 import WeeklyTrends from "../components/WeeklyTrends.jsx";
 import { useCampaignStore } from "../store/campaignStore.js";
+import { useAuthStore } from "../store/authStore.js";
 
 function Stat({ label, value, sub, icon }) {
   return (
@@ -34,7 +35,8 @@ function Stat({ label, value, sub, icon }) {
 
 function Dashboard() {
   const navigate = useNavigate();
-  
+  const { user } = useAuthStore();
+
   // integrations list (static)
   const integrations = ['Canva', 'Reddit', 'Facebook', 'Twitter', 'HubSpot', 'Slack', 'Google Analytics', 'Giphy', 'Unsplash', 'Bitly'];
 
@@ -371,7 +373,7 @@ function Dashboard() {
       <Hero />
 
       <PageHeader
-        title={`Welcome back, Alex`}
+        title={`Welcome back, ${user?.name || 'User'}`}
         description={`Here is what is happening with your campaigns today.`}
         actions={
           <Link to="/create">
@@ -381,7 +383,7 @@ function Dashboard() {
       />
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Stat
           label="Total campaigns"
           value={effectiveStats.total}
@@ -397,15 +399,6 @@ function Dashboard() {
           icon={
             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          }
-        />
-        <Stat
-          label="Avg engagement"
-          value={`${effectiveStats.avgEngagement}%`}
-          icon={
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           }
         />
@@ -499,8 +492,8 @@ function Dashboard() {
         <h4 className="font-semibold mb-3">Integrations</h4>
         <div className="flex flex-wrap gap-3">
           {['Canva', 'Reddit', 'Facebook', 'Twitter', 'HubSpot', 'Slack', 'Google Analytics', 'Giphy', 'Unsplash', 'Bitly'].map((it) => (
-            <div 
-              key={it} 
+            <div
+              key={it}
               className="px-4 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-full text-[var(--text)] cursor-pointer hover:bg-[var(--bg-muted)] transition-colors"
               onClick={() => navigate('/settings')}
             >
@@ -576,7 +569,7 @@ function Dashboard() {
                   {bucket.posts.map((p) => {
                     const when = new Date(p.scheduled_at || p.scheduled_time || p.scheduledAt || p.start_time || p.start || 0);
                     const timeStr = isNaN(when.getTime()) ? '' : format(when, 'p');
-                    
+
                     // Enhanced platform detection with multiple fallbacks
                     let platforms = [];
                     if (Array.isArray(p.platforms) && p.platforms.length > 0) {
@@ -587,11 +580,11 @@ function Dashboard() {
                       // Default fallback - assume Instagram as most common
                       platforms = ['Instagram'];
                     }
-                    
+
                     const platformStr = platforms.map(platform => {
                       // Capitalize and format platform names
                       const formatted = platform.toLowerCase();
-                      switch(formatted) {
+                      switch (formatted) {
                         case 'facebook': return 'Facebook';
                         case 'instagram': return 'Instagram';
                         case 'twitter': return 'Twitter';
@@ -600,7 +593,7 @@ function Dashboard() {
                         default: return platform.charAt(0).toUpperCase() + platform.slice(1).toLowerCase();
                       }
                     }).join(', ');
-                    
+
                     const title = p.campaignName || p.campaign_name || p.original_description || `Post ${p.id}`;
                     return (
                       <div key={p.id} className="px-4 py-3 bg-[var(--surface)] rounded-md">
