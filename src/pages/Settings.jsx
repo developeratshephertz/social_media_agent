@@ -124,16 +124,20 @@ function Settings() {
   };
 
   const disconnectGoogle = async () => {
-    // For now, we'll just update the UI. In a real app, you'd call an endpoint to revoke tokens
     try {
       setLoading(true);
-      // You would typically call an endpoint to revoke the token here
-      // await apiFetch("/google/disconnect", { method: "POST" });
-
-      setDriveConnected(false);
-      toast.success("Disconnected from Google Drive");
+      const response = await apiFetch("/google/disconnect", { method: "POST" });
+      
+      if (response.ok) {
+        setDriveConnected(false);
+        setCalendarConnected(false);
+        toast.success("Successfully disconnected from Google services");
+      } else {
+        throw new Error("Failed to disconnect");
+      }
     } catch (error) {
-      toast.error("Failed to disconnect from Google Drive");
+      console.error("Failed to disconnect from Google:", error);
+      toast.error("Failed to disconnect from Google services");
     } finally {
       setLoading(false);
     }
@@ -378,14 +382,10 @@ function Settings() {
               {calendarConnected ? (
                 <Button
                   variant="secondary"
-                  onClick={() => {
-                    setCalendarConnected(false);
-                    setDriveConnected(false);
-                    toast.success("Disconnected from Google Calendar");
-                  }}
-                  disabled={calendarLoading}
+                  onClick={disconnectGoogle}
+                  disabled={loading}
                 >
-                  {calendarLoading ? "Disconnecting..." : "Disconnect"}
+                  {loading ? "Disconnecting..." : "Disconnect"}
                 </Button>
               ) : (
                 <Button

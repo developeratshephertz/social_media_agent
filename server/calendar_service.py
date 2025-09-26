@@ -45,6 +45,7 @@ class CalendarService:
             
             # Create new calendar event
             calendar_event = CalendarEvent(
+                user_id=event_data.get('user_id'),  # Add user_id field
                 post_id=event_data.get('post_id'),
                 title=title,
                 description=event_data.get('description', ''),
@@ -213,8 +214,23 @@ class CalendarService:
             if not post:
                 raise ValueError(f"Post {post_id} not found")
             
-            # Create event data from post - use campaign name if available for basic mode posts
-            event_title = post.campaign_name if post.campaign_name else f"Post: {post.original_description[:50]}..."
+            # Create event data from post - prioritize campaign name, then meaningful content
+            event_title = ''
+            if post.campaign_name and post.campaign_name.strip() and post.campaign_name != 'Untitled Campaign':
+                event_title = post.campaign_name.strip()
+            elif post.original_description and post.original_description.strip() and len(post.original_description.strip()) > 10:
+                # Only use original_description if it looks like actual content (not just an ID)
+                desc = post.original_description.strip()
+                if not (desc.startswith('Post ') and len(desc.split('-')) > 3):  # Avoid UUID-like strings
+                    event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                else:
+                    event_title = "Campaign Post"
+            elif post.caption and post.caption.strip():
+                caption = post.caption.strip()
+                event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+            else:
+                event_title = "Social Media Campaign"
+                
             event_data = {
                 'post_id': post_id,
                 'title': event_title,

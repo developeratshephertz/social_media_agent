@@ -62,13 +62,13 @@ services:
       TWITTER_CLIENT_ID: ${TWITTER_CLIENT_ID}
       TWITTER_CLIENT_SECRET: ${TWITTER_CLIENT_SECRET}
       TWITTER_USERNAME: ${TWITTER_USERNAME}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8000/callback}
     ports:
       - "8000:8000"
     volumes:
       - ./server/public:/app/public
       - ./server/.env:/app/.env
       - ./server/Credentials.json:/app/Credentials.json:ro
-      - ./server/token.json:/app/token.json
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

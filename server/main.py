@@ -1153,6 +1153,37 @@ async def get_recent_posts(limit: int = 10, current_user = Depends(get_current_u
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.put("/api/posts/{post_id}/schedule")
+async def schedule_post(post_id: str, schedule_data: dict, current_user = Depends(get_current_user_dependency)):
+    """Schedule an existing post and create calendar event"""
+    try:
+        # Parse scheduled_at
+        scheduled_at = None
+        if schedule_data.get('scheduled_at'):
+            from datetime import datetime
+            scheduled_at = datetime.fromisoformat(schedule_data['scheduled_at'].replace('Z', '+00:00'))
+        
+        if not scheduled_at:
+            raise HTTPException(status_code=400, detail="scheduled_at is required")
+        
+        # Update post schedule and create calendar event
+        success = await db_service.update_post_schedule(
+            post_id=post_id,
+            scheduled_at=scheduled_at,
+            status=schedule_data.get('status', 'scheduled'),
+            platforms=schedule_data.get('platforms')
+        )
+        
+        if success:
+            return {"success": True, "message": "Post scheduled successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Post not found or update failed")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 
 @app.put("/api/posts/{post_id}")
 async def update_post(post_id: str, update_data: dict):
@@ -1315,7 +1346,7 @@ async def generate_schedule_dates(request: GenerateScheduleRequest):
 
 
 @app.post("/api/batch/{batch_id}/schedule")
-async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest):
+async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest, current_user = Depends(get_current_user_dependency)):
     """Schedule all posts in a batch"""
     try:
         # Generate schedule times based on number of posts and days
@@ -1330,7 +1361,8 @@ async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest):
             batch_id=batch_id,
             platforms=request.platforms,
             schedule_times=schedule_times,
-            days=request.days
+            days=request.days,
+            user_id=str(current_user.id)  # 🔧 Pass current user ID
         )
         
         if success:
@@ -1452,7 +1484,7 @@ async def get_calendar_event(event_id: str):
 
 
 @app.post("/api/calendar/events")
-async def create_calendar_event(request: CalendarEventRequest):
+async def create_calendar_event(request: CalendarEventRequest, current_user = Depends(get_current_user_dependency)):
     """Create a new calendar event"""
     try:
         calendar_service = get_calendar_service()
@@ -1466,7 +1498,8 @@ async def create_calendar_event(request: CalendarEventRequest):
             "location": request.location,
             "color": request.color,
             "reminder_minutes": request.reminder_minutes,
-            "post_id": request.post_id
+            "post_id": request.post_id,
+            "user_id": str(current_user.id)  # Add current user ID
         }
         
         event = calendar_service.create_event(event_data)
@@ -1554,15 +1587,221 @@ async def get_upcoming_events(days_ahead: int = 30):
         return {"success": False, "error": str(e)}
 
 
+@app.post("/api/calendar/sync-all-posts")
+async def sync_all_calendar_with_posts():
+    """Sync calendar events with scheduled posts for all users (no auth required)"""
+    try:
+        # Get all scheduled posts that don't have calendar events
+        scheduled_posts_query = """
+            SELECT p.id, p.user_id, p.campaign_name, p.original_description, p.caption, 
+                   p.scheduled_at, p.platforms
+            FROM posts p
+            LEFT JOIN calendar_events c ON c.post_id = p.id
+            WHERE p.status = 'scheduled' 
+              AND p.scheduled_at IS NOT NULL 
+              AND p.user_id IS NOT NULL
+              AND c.post_id IS NULL
+            ORDER BY p.scheduled_at ASC
+        """
+        
+        from database import db_manager
+        results = await db_manager.fetch_all(scheduled_posts_query)
+        
+        created_count = 0
+        failed_count = 0
+        
+        for post in results:
+            try:
+                # Create meaningful title from campaign name or description
+                event_title = ''
+                if post.get('campaign_name') and post['campaign_name'].strip():
+                    event_title = post['campaign_name'].strip()
+                elif post.get('original_description') and len(post['original_description'].strip()) > 10:
+                    desc = post['original_description'].strip()
+                    event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                elif post.get('caption') and post['caption'].strip():
+                    caption = post['caption'].strip()
+                    event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+                else:
+                    event_title = "Social Media Post"
+                
+                # Create calendar event
+                await db_service.create_calendar_event(
+                    post_id=str(post['id']),
+                    user_id=str(post['user_id']),
+                    title=event_title,
+                    description=post['caption'] or post['original_description'] or "",
+                    start_time=post['scheduled_at'],
+                    end_time=post['scheduled_at'],
+                    status='scheduled',
+                    platforms=post['platforms'] or []
+                )
+                
+                created_count += 1
+                print(f"🔄 Auto-synced calendar event for post {post['id']}: {event_title}")
+                
+            except Exception as post_error:
+                failed_count += 1
+                print(f"⚠️ Failed to sync calendar event for post {post['id']}: {post_error}")
+        
+        return {
+            "success": True, 
+            "stats": {
+                "created": created_count,
+                "failed": failed_count,
+                "message": f"Synced {created_count} calendar events, {failed_count} failed"
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error syncing all calendar with posts: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/calendar/sync-with-posts")
-async def sync_calendar_with_posts():
+async def sync_calendar_with_posts(current_user = Depends(get_current_user_dependency)):
     """Sync calendar events with scheduled posts"""
     try:
-        calendar_service = get_calendar_service()
-        stats = calendar_service.sync_with_posts()
+        # Get all scheduled posts for the current user that don't have calendar events
+        scheduled_posts_query = """
+            SELECT p.id, p.user_id, p.campaign_name, p.original_description, p.caption, 
+                   p.scheduled_at, p.platforms, p.image_path
+            FROM posts p
+            LEFT JOIN calendar_events c ON c.post_id = p.id
+            WHERE p.status = 'scheduled' 
+              AND p.scheduled_at IS NOT NULL 
+              AND p.user_id = :user_id
+              AND c.post_id IS NULL
+            ORDER BY p.scheduled_at ASC
+        """
         
-        return {"success": True, "stats": stats}
+        from database import db_manager
+        results = await db_manager.fetch_all(scheduled_posts_query, {"user_id": str(current_user.id)})
+        
+        created_count = 0
+        failed_count = 0
+        
+        for post in results:
+            try:
+                # Create meaningful title from campaign name or description
+                event_title = ''
+                if post.get('campaign_name') and post['campaign_name'].strip() and post['campaign_name'] != 'Untitled Campaign':
+                    event_title = post['campaign_name'].strip()
+                elif post.get('original_description') and len(post['original_description'].strip()) > 10:
+                    desc = post['original_description'].strip()
+                    # Avoid UUID-like strings
+                    if not (desc.startswith('Post ') and len(desc.split('-')) > 3):
+                        event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                    else:
+                        event_title = "Campaign Post"
+                elif post.get('caption') and post['caption'].strip():
+                    caption = post['caption'].strip()
+                    event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+                else:
+                    event_title = "Social Media Campaign"
+                
+                # Create calendar event
+                await db_service.create_calendar_event(
+                    post_id=str(post['id']),
+                    user_id=str(post['user_id']),
+                    title=event_title,
+                    description=post['caption'] or post['original_description'] or "",
+                    start_time=post['scheduled_at'],
+                    end_time=post['scheduled_at'],
+                    status='scheduled',
+                    platforms=post['platforms'] or []
+                )
+                
+                created_count += 1
+                print(f"✅ Created calendar event for post {post['id']}: {event_title}")
+                
+            except Exception as post_error:
+                failed_count += 1
+                print(f"❌ Failed to create calendar event for post {post['id']}: {post_error}")
+        
+        return {
+            "success": True, 
+            "stats": {
+                "created": created_count,
+                "failed": failed_count,
+                "message": f"Created {created_count} calendar events, {failed_count} failed"
+            }
+        }
+        
     except Exception as e:
+        print(f"Error syncing calendar with posts: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/calendar/auto-sync")
+async def auto_sync_calendar_events():
+    """Automatically sync calendar events for all users (called on startup)"""
+    try:
+        # Get all scheduled posts that don't have calendar events
+        scheduled_posts_query = """
+            SELECT p.id, p.user_id, p.campaign_name, p.original_description, p.caption, 
+                   p.scheduled_at, p.platforms
+            FROM posts p
+            LEFT JOIN calendar_events c ON c.post_id = p.id
+            WHERE p.status = 'scheduled' 
+              AND p.scheduled_at IS NOT NULL 
+              AND p.user_id IS NOT NULL
+              AND c.post_id IS NULL
+            ORDER BY p.scheduled_at ASC
+        """
+        
+        from database import db_manager
+        results = await db_manager.fetch_all(scheduled_posts_query)
+        
+        created_count = 0
+        failed_count = 0
+        
+        for post in results:
+            try:
+                # Create meaningful title from campaign name or description
+                event_title = ''
+                if post.get('campaign_name') and post['campaign_name'].strip():
+                    event_title = post['campaign_name'].strip()
+                elif post.get('original_description') and len(post['original_description'].strip()) > 10:
+                    desc = post['original_description'].strip()
+                    event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                elif post.get('caption') and post['caption'].strip():
+                    caption = post['caption'].strip()
+                    event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+                else:
+                    event_title = "Social Media Post"
+                
+                # Create calendar event
+                await db_service.create_calendar_event(
+                    post_id=str(post['id']),
+                    user_id=str(post['user_id']),
+                    title=event_title,
+                    description=post['caption'] or post['original_description'] or "",
+                    start_time=post['scheduled_at'],
+                    end_time=post['scheduled_at'],
+                    status='scheduled',
+                    platforms=post['platforms'] or []
+                )
+                
+                created_count += 1
+                print(f"🔄 Auto-created calendar event for post {post['id']}: {event_title}")
+                
+            except Exception as post_error:
+                failed_count += 1
+                print(f"⚠️ Failed to auto-create calendar event for post {post['id']}: {post_error}")
+        
+        if created_count > 0:
+            print(f"✅ Auto-sync completed: Created {created_count} calendar events, {failed_count} failed")
+        
+        return {
+            "success": True, 
+            "stats": {
+                "created": created_count,
+                "failed": failed_count,
+                "message": f"Auto-created {created_count} calendar events"
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error in auto-sync calendar: {e}")
         return {"success": False, "error": str(e)}
 
 

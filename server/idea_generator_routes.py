@@ -63,7 +63,7 @@ async def generate_ideas(
     current_user = Depends(get_current_user_dependency)
 ):
     """
-    Generate 5 trending content ideas based on user input
+    Generate 5 trending content ideas based on user input with comprehensive analysis
     """
     try:
         print(f"🎯 Generating ideas for user: {current_user.email}")
@@ -76,10 +76,31 @@ async def generate_ideas(
         if not request.goals:
             raise HTTPException(status_code=400, detail="At least one goal must be selected")
         
-        # Generate ideas using the AI service
+        # Check for uploaded files in the public directory
+        uploaded_files = []
+        try:
+            user_upload_dir = f"public/idea_generator/{current_user.id}"
+            if os.path.exists(user_upload_dir):
+                for file_type in ["trend_data", "brand_assets", "competitor_assets"]:
+                    type_dir = os.path.join(user_upload_dir, file_type)
+                    if os.path.exists(type_dir):
+                        for filename in os.listdir(type_dir):
+                            file_path = os.path.join(type_dir, filename)
+                            if os.path.isfile(file_path):
+                                uploaded_files.append({
+                                    'path': file_path,
+                                    'filename': filename,
+                                    'type': file_type
+                                })
+            print(f"📁 Found {len(uploaded_files)} uploaded files for analysis")
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to check for uploaded files: {e}")
+        
+        # Generate ideas using the AI service with file analysis
         ideas = await idea_service.generate_ideas(
             user_data=request.dict(),
-            user_id=str(current_user.id)
+            user_id=str(current_user.id),
+            uploaded_files=uploaded_files
         )
         
         if not ideas:

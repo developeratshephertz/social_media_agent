@@ -66,6 +66,8 @@ function MyCampaigns() {
     steps: ["Uploading to Drive", "Creating Calendar Events", "Finalizing"]
   });
   const [deleteBatchConfirm, setDeleteBatchConfirm] = useState(null);
+  const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '', preset: 'all' });
+  const [showDateFilter, setShowDateFilter] = useState(false);
 
   const handlePlatformToggle = (platform) => {
     setSelectedPlatformsForScheduling(prev => {
@@ -76,9 +78,85 @@ function MyCampaigns() {
     });
   };
 
+  // Date filter handlers
+  const handleDateFilterPreset = (preset) => {
+    const now = new Date();
+    let startDate = '';
+    let endDate = '';
+
+    switch (preset) {
+      case 'today':
+        startDate = format(now, 'yyyy-MM-dd');
+        endDate = format(now, 'yyyy-MM-dd');
+        break;
+      case 'yesterday':
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        startDate = format(yesterday, 'yyyy-MM-dd');
+        endDate = format(yesterday, 'yyyy-MM-dd');
+        break;
+      case 'last7days':
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        startDate = format(weekAgo, 'yyyy-MM-dd');
+        endDate = format(now, 'yyyy-MM-dd');
+        break;
+      case 'last30days':
+        const monthAgo = new Date(now);
+        monthAgo.setDate(monthAgo.getDate() - 30);
+        startDate = format(monthAgo, 'yyyy-MM-dd');
+        endDate = format(now, 'yyyy-MM-dd');
+        break;
+      case 'thisMonth':
+        startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
+        endDate = format(now, 'yyyy-MM-dd');
+        break;
+      case 'lastMonth':
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        startDate = format(lastMonth, 'yyyy-MM-dd');
+        endDate = format(lastMonthEnd, 'yyyy-MM-dd');
+        break;
+      case 'all':
+      default:
+        startDate = '';
+        endDate = '';
+        break;
+    }
+
+    setDateFilter({ startDate, endDate, preset });
+  };
+
+  const clearDateFilter = () => {
+    setDateFilter({ startDate: '', endDate: '', preset: 'all' });
+  };
+
   const batches = useMemo(() => {
+    // First filter campaigns by date if filter is active
+    let filteredCampaigns = campaigns;
+    
+    if (dateFilter.startDate || dateFilter.endDate) {
+      filteredCampaigns = campaigns.filter(campaign => {
+        const createdAt = new Date(campaign.createdAt || Date.now());
+        const campaignDate = format(createdAt, 'yyyy-MM-dd');
+        
+        let matchesFilter = true;
+        
+        if (dateFilter.startDate) {
+          matchesFilter = matchesFilter && campaignDate >= dateFilter.startDate;
+        }
+        
+        if (dateFilter.endDate) {
+          matchesFilter = matchesFilter && campaignDate <= dateFilter.endDate;
+        }
+        
+        return matchesFilter;
+      });
+    }
+    
+    // Group filtered campaigns into batches
     const map = new Map();
-    for (const c of campaigns) {
+    for (const c of filteredCampaigns) {
       const key = c.batchId || "single";
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(c);
@@ -89,7 +167,7 @@ function MyCampaigns() {
     return list.sort(
       (a, b) => (b.items[0]?.createdAt || 0) - (a.items[0]?.createdAt || 0)
     );
-  }, [campaigns]);
+  }, [campaigns, dateFilter]);
 
   const saveSchedule = () => {
     if (!scheduleDate || !scheduleTime) return;
@@ -113,8 +191,23 @@ function MyCampaigns() {
     try {
       // Best-effort delete any linked calendar events first
       await Promise.allSettled(itemsToDelete.map(async (item) => {
-        if (item.calendarEventId) {
-          try { await apiFetch(`/api/calendar/events/${item.calendarEventId}`, { method: "DELETE" }); } catch { }
+        try {
+          // Method 1: Delete by calendarEventId if available
+          if (item.calendarEventId) {
+            await apiFetch(`/api/calendar/events/${item.calendarEventId}`, { method: "DELETE" });
+          }
+          // Method 2: Delete by post_id to catch any events not linked via calendarEventId
+          const eventsResponse = await apiFetch(`/api/calendar/events/post/${item.id}`);
+          if (eventsResponse.ok) {
+            const eventsData = await eventsResponse.json();
+            if (eventsData.success && eventsData.events) {
+              for (const event of eventsData.events) {
+                await apiFetch(`/api/calendar/events/${event.id}`, { method: "DELETE" });
+              }
+            }
+          }
+        } catch (eventError) {
+          console.warn(`Failed to delete calendar events for campaign ${item.id}:`, eventError);
         }
       }));
 
@@ -154,11 +247,25 @@ function MyCampaigns() {
         try {
           // Update local + DB via store helper
           await updateCampaign(item.id, { status: "Draft", scheduledAt: null });
-          // Best-effort: delete any existing calendar event for the post
-          if (item.calendarEventId) {
-            try {
+          
+          // Best-effort: delete any existing calendar events for the post
+          try {
+            // Method 1: Delete by calendarEventId if available
+            if (item.calendarEventId) {
               await apiFetch(`/api/calendar/events/${item.calendarEventId}`, { method: "DELETE" });
-            } catch { }
+            }
+            // Method 2: Delete by post_id to catch any events not linked via calendarEventId
+            const eventsResponse = await apiFetch(`/api/calendar/events/post/${item.id}`);
+            if (eventsResponse.ok) {
+              const eventsData = await eventsResponse.json();
+              if (eventsData.success && eventsData.events) {
+                for (const event of eventsData.events) {
+                  await apiFetch(`/api/calendar/events/${event.id}`, { method: "DELETE" });
+                }
+              }
+            }
+          } catch (eventError) {
+            console.warn(`Failed to delete calendar events for campaign ${item.id}:`, eventError);
           }
         } catch (e) {
           console.warn("Failed to save as draft:", item.id, e);
@@ -298,25 +405,31 @@ function MyCampaigns() {
         // Update local state
         updateCampaign(item.id, updatedData);
 
-        // Also update the database
+        // Use robust backend scheduling endpoint that automatically creates calendar events
         try {
-          const updateResponse = await apiFetch(`/api/posts/${item.id}`, {
+          const scheduleResponse = await apiFetch(`/api/posts/${item.id}/schedule`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               scheduled_at: dates[i],
               status: "scheduled",
-              platform: selectedPlatformForScheduling || item.platform || "instagram"
+              platforms: [selectedPlatformForScheduling || item.platform || "instagram"]
             })
           });
 
-          if (updateResponse.ok) {
-            console.log(`📅 Campaign ${item.id} scheduled for ${new Date(dates[i]).toLocaleString()} on ${selectedPlatformForScheduling || item.platform || "instagram"}`);
+          if (scheduleResponse.ok) {
+            const scheduleData = await scheduleResponse.json();
+            if (scheduleData.success) {
+              console.log(`✅ Campaign ${item.id} scheduled for ${new Date(dates[i]).toLocaleString()} with calendar event created`);
+            } else {
+              console.error(`❌ Failed to schedule campaign ${item.id}:`, scheduleData.error);
+            }
           } else {
-            console.error(`Failed to update database for campaign ${item.id}`);
+            const errorText = await scheduleResponse.text();
+            console.error(`❌ Failed to schedule campaign ${item.id}: ${scheduleResponse.status} - ${errorText}`);
           }
-        } catch (dbUpdateError) {
-          console.error(`Database update error for campaign ${item.id}:`, dbUpdateError);
+        } catch (scheduleError) {
+          console.error(`❌ Schedule error for campaign ${item.id}:`, scheduleError);
         }
       });
 
@@ -403,118 +516,9 @@ function MyCampaigns() {
 
       setSchedulingProgress(prev => ({ ...prev, progress: 60, currentStep: 2 }));
 
-      // Refresh campaigns from database to ensure we have the latest IDs before creating calendar events
-      console.log('🔄 Refreshing campaigns from database before calendar event creation...');
+      // Refresh campaigns to get updated data after scheduling
+      console.log('🔄 Refreshing campaigns after scheduling...');
       await loadCampaignsFromDB();
-
-      // Get fresh campaigns after reload
-      const { campaigns: freshCampaigns } = useCampaignStore.getState();
-      const refreshedCampaigns = freshCampaigns.filter((c) =>
-        batchId === "single" ? !c.batchId : c.batchId === batchId
-      );
-      console.log(`📊 Refreshed ${refreshedCampaigns.length} campaigns for calendar events`);
-
-      // Step 3: Create calendar events for each scheduled item (using refreshed data)
-      for (let i = 0; i < refreshedCampaigns.length; i++) {
-        const item = refreshedCampaigns[i];
-        try {
-          // Ensure we use the actual database ID, not temporary frontend ID
-          const actualPostId = String(item.id);
-
-          // Get the batch ID this item belongs to
-          const itemBatchId = item.batchId || "single";
-
-          const eventData = {
-            title: `📱 ${item.campaignName || item.productDescription?.substring(0, 50) || 'Post'}`,
-            description: item.generatedContent || item.productDescription,
-            start_time: dates[i],
-            end_time: dates[i], // Point-in-time event matching scheduled time
-            color: "#3174ad",
-            post_id: actualPostId,
-            metadata: {
-              batch_id: itemBatchId,
-              campaign_id: actualPostId,
-              product_description: item.productDescription,
-              created_by: "batch_scheduler"
-            }
-          };
-
-          console.log(`📅 Creating calendar event for campaign ${actualPostId} (batch: ${itemBatchId}):`, eventData);
-
-          const response = await apiFetch("/api/calendar/events", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(eventData)
-          });
-
-          if (response.ok) {
-            const calendarData = await response.json();
-            if (calendarData.success) {
-              updateCampaign(item.id, {
-                calendarEventId: calendarData.event?.id
-              });
-              console.log(`✅ Calendar event created for campaign ${actualPostId}:`, {
-                eventId: calendarData.event?.id,
-                postId: actualPostId,
-                title: eventData.title
-              });
-            } else {
-              console.error(`❌ Calendar creation failed for ${actualPostId}:`, calendarData.error);
-            }
-          } else {
-            const errorText = await response.text();
-            console.error(`❌ Failed to create calendar event for ${actualPostId}: ${response.status} - ${errorText}`);
-          }
-
-          // Also create Google Calendar event if connected
-          if (googleConnected) {
-            try {
-              const googleCalendarData = {
-                id: item.id,
-                productDescription: item.productDescription,
-                generatedContent: item.generatedContent,
-                scheduledAt: dates[i],
-                status: "Scheduled",
-                imageUrl: item.imageUrl,
-                driveImageUrl: item.driveImageUrl || item.imageUrl,
-                activity: [{ time: Date.now(), text: "Calendar event created" }]
-              };
-
-              console.log(`📅 Creating Google Calendar event for ${item.id}...`);
-              const googleCalendarResponse = await apiFetch("/google-calendar/create-event", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(googleCalendarData)
-              });
-
-              if (googleCalendarResponse.ok) {
-                const googleCalData = await googleCalendarResponse.json();
-                console.log(`Google Calendar response for ${item.id}:`, googleCalData);
-                if (googleCalData.success) {
-                  updateCampaign(item.id, {
-                    googleCalendarEventId: googleCalData.eventId,
-                    googleCalendarLink: googleCalData.eventLink
-                  });
-                  console.log(`✅ Google Calendar event created for campaign ${item.id}`);
-                } else {
-                  console.error(`❌ Google Calendar creation failed for ${item.id}:`, googleCalData.error || 'Unknown error');
-                }
-              } else {
-                const errorText = await googleCalendarResponse.text();
-                console.error(`❌ Failed to create Google Calendar event for ${item.id}: ${googleCalendarResponse.status} - ${errorText}`);
-              }
-            } catch (googleCalError) {
-              console.error(`❌ Google Calendar error for campaign ${item.id}:`, googleCalError);
-            }
-          }
-        } catch (error) {
-          console.error(`Error creating calendar event for ${item.id}:`, error);
-        }
-
-        // Update progress
-        const progress = 60 + ((i + 1) / refreshedCampaigns.length) * 40;
-        setSchedulingProgress(prev => ({ ...prev, progress }));
-      }
 
       // Step 4: Finalize
       setSchedulingProgress(prev => ({ ...prev, progress: 100, currentStep: 2 }));
@@ -524,8 +528,8 @@ function MyCampaigns() {
       await fetchCalendarEvents();
 
       const successMessage = googleConnected
-        ? `Scheduled ${refreshedCampaigns.length} posts, uploaded to Google Drive, and created calendar events!`
-        : `Scheduled ${refreshedCampaigns.length} posts and created calendar events!`;
+        ? `Scheduled ${draftItems.length} posts and uploaded to Google Drive!`
+        : `Scheduled ${draftItems.length} posts!`;
 
       toast.success(successMessage);
 
@@ -615,7 +619,142 @@ function MyCampaigns() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">My Campaigns</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowDateFilter(!showDateFilter)}
+            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              showDateFilter || dateFilter.preset !== 'all'
+                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Filter by Date
+            {dateFilter.preset !== 'all' && (
+              <span className="ml-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                {dateFilter.preset === 'today' ? 'Today' :
+                 dateFilter.preset === 'yesterday' ? 'Yesterday' :
+                 dateFilter.preset === 'last7days' ? 'Last 7 days' :
+                 dateFilter.preset === 'last30days' ? 'Last 30 days' :
+                 dateFilter.preset === 'thisMonth' ? 'This month' :
+                 dateFilter.preset === 'lastMonth' ? 'Last month' : 'Custom'}
+              </span>
+            )}
+          </button>
+          {dateFilter.preset !== 'all' && (
+            <button
+              onClick={clearDateFilter}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Clear filter"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Date Filter Panel */}
+      {showDateFilter && (
+        <Card>
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900">Filter Campaigns by Creation Date</h3>
+              <button
+                onClick={() => setShowDateFilter(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Quick Presets */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Quick Filters</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 'all', label: 'All Time' },
+                  { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
+                  { value: 'last7days', label: 'Last 7 Days' },
+                  { value: 'last30days', label: 'Last 30 Days' },
+                  { value: 'thisMonth', label: 'This Month' },
+                  { value: 'lastMonth', label: 'Last Month' }
+                ].map(preset => (
+                  <button
+                    key={preset.value}
+                    onClick={() => handleDateFilterPreset(preset.value)}
+                    className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                      dateFilter.preset === preset.value
+                        ? 'bg-blue-100 border-blue-300 text-blue-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Date Range */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Custom Date Range</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">From Date</label>
+                  <input
+                    type="date"
+                    value={dateFilter.startDate}
+                    onChange={(e) => setDateFilter(prev => ({ 
+                      ...prev, 
+                      startDate: e.target.value, 
+                      preset: e.target.value || prev.endDate ? 'custom' : 'all' 
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">To Date</label>
+                  <input
+                    type="date"
+                    value={dateFilter.endDate}
+                    onChange={(e) => setDateFilter(prev => ({ 
+                      ...prev, 
+                      endDate: e.target.value, 
+                      preset: prev.startDate || e.target.value ? 'custom' : 'all' 
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Summary */}
+            {(dateFilter.startDate || dateFilter.endDate) && (
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm text-blue-800">
+                    Showing campaigns created {dateFilter.startDate && dateFilter.endDate
+                      ? `between ${format(new Date(dateFilter.startDate), 'MMM dd, yyyy')} and ${format(new Date(dateFilter.endDate), 'MMM dd, yyyy')}`
+                      : dateFilter.startDate
+                        ? `from ${format(new Date(dateFilter.startDate), 'MMM dd, yyyy')} onwards`
+                        : `up to ${format(new Date(dateFilter.endDate), 'MMM dd, yyyy')}`
+                    }
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Progress Bar for Scheduling */}
       {schedulingProgress.visible && (
@@ -633,9 +772,33 @@ function MyCampaigns() {
         </Card>
       )}
 
-      <Card title="Campaigns">
+      <Card title={`Campaigns ${dateFilter.preset !== 'all' ? `(${batches.length} ${batches.length === 1 ? 'batch' : 'batches'} found)` : ''}`}>
         <div className="divide-y">
-          {batches.map((b) => {
+          {batches.length === 0 && dateFilter.preset !== 'all' ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">📅</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns found</h3>
+              <p className="text-gray-500 mb-4">
+                No campaigns were created in the selected date range.
+              </p>
+              <button
+                onClick={clearDateFilter}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Clear filter to show all campaigns
+              </button>
+            </div>
+          ) : batches.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">📋</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns yet</h3>
+              <p className="text-gray-500">Create your first campaign to get started.</p>
+            </div>
+          ) : (
+            batches.map((b) => {
             const total = b.items.length;
             const scheduled = b.items.filter(
               (x) => x.status === "Scheduled"
@@ -647,7 +810,11 @@ function MyCampaigns() {
             const draft = b.items.filter((x) => x.status === "Draft").length;
             // More descriptive status logic
             let schedulingStatus;
-            if (scheduled > 0 && draft > 0) {
+            if (posted === total && posted > 0) {
+              schedulingStatus = "Posted";
+            } else if (failed > 0 && (posted + failed) === total) {
+              schedulingStatus = posted > 0 ? "Partially Posted" : "Failed";
+            } else if (scheduled > 0 && draft > 0) {
               schedulingStatus = "Partially Scheduled";
             } else if (scheduled > 0) {
               schedulingStatus = "Scheduled";
@@ -669,14 +836,17 @@ function MyCampaigns() {
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <Badge color={
-                    schedulingStatus === "Scheduled" ? "green" :
-                      schedulingStatus === "Partially Scheduled" ? "blue" :
-                        schedulingStatus === "Draft" ? "yellow" : "gray"
+                    schedulingStatus === "Posted" ? "blue" :
+                      schedulingStatus === "Partially Posted" ? "purple" :
+                        schedulingStatus === "Scheduled" ? "green" :
+                          schedulingStatus === "Partially Scheduled" ? "orange" :
+                            schedulingStatus === "Draft" ? "yellow" :
+                              schedulingStatus === "Failed" ? "red" : "gray"
                   }>
                     {schedulingStatus}
                   </Badge>
-                  {/* Show Schedule button only if there are drafts AND no scheduled posts */}
-                  {draft > 0 && scheduled === 0 ? (
+                  {/* Show Schedule button only if there are drafts AND no scheduled/posted posts */}
+                  {draft > 0 && scheduled === 0 && posted === 0 ? (
                     // Blue Schedule button for campaigns with only drafts
                     <button
                       onClick={() => setPlatformScheduleModal(b)}
@@ -713,6 +883,25 @@ function MyCampaigns() {
                         <circle cx="12" cy="12" r="10" />
                       </svg>
                       Scheduled
+                    </button>
+                  ) : posted > 0 ? (
+                    // Gray Posted button for campaigns that have posted content
+                    <button
+                      disabled
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-md border border-blue-200 shadow-sm cursor-default"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M9 12l2 2 4-4" />
+                        <circle cx="12" cy="12" r="10" />
+                      </svg>
+                      Posted
                     </button>
                   ) : null}
                   <IconButton title="View" onClick={() => setViewBatchId(b.id)}>
@@ -778,11 +967,9 @@ function MyCampaigns() {
                 </div>
               </div>
             );
-          })}
+          })
+          )}
         </div>
-        {batches.length === 0 && (
-          <div className="text-center text-gray-500 py-10">No batches yet.</div>
-        )}
       </Card>
 
       <Modal
@@ -865,56 +1052,48 @@ function MyCampaigns() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal
-        open={!!deleteBatchConfirm}
-        onOpenChange={(open) => !open && setDeleteBatchConfirm(null)}
-      >
-        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[90vw] max-w-md">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Delete Campaigns</h2>
-            <IconButton title="Close" onClick={() => setDeleteBatchConfirm(null)}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-            </IconButton>
-          </div>
-          <div className="p-6 space-y-4">
-            {deleteBatchConfirm && (
-              <>
-                <p className="text-sm text-gray-700">
-                  You are about to remove <strong>{(deleteBatchConfirm.items || []).length}</strong> post(s) from <strong>{deleteBatchConfirm.items?.[0]?.campaignName || deleteBatchConfirm.items?.[0]?.productDescription || 'this campaign'}</strong>.
+      {!!deleteBatchConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full">
+                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Delete {(deleteBatchConfirm.items || []).length} Post{(deleteBatchConfirm.items || []).length !== 1 ? 's' : ''}?
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  Are you sure you want to permanently delete {(deleteBatchConfirm.items || []).length > 1 ? 'these posts' : 'this post'}? 
+                  This action cannot be undone and will remove all associated data including images, schedules, and calendar events.
                 </p>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
-                  Choose "Save as Draft" to keep the posts but unschedule them, or "Delete Permanently" to remove them.
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button variant="secondary" onClick={() => setDeleteBatchConfirm(null)} size="sm">Cancel</Button>
-                  <Button
-                    variant="secondary"
-                    onClick={async () => {
-                      const id = deleteBatchConfirm.id;
-                      setDeleteBatchConfirm(null);
-                      await saveBatchAsDraft(id);
-                    }}
-                    size="sm"
-                  >
-                    Save as Draft
-                  </Button>
-                  <Button
-                    variant="danger"
-                    onClick={async () => {
-                      const id = deleteBatchConfirm.id;
-                      setDeleteBatchConfirm(null);
-                      await deleteBatch(id);
-                    }}
-                    size="sm"
-                  >
-                    Delete Permanently
-                  </Button>
-                </div>
-              </>
-            )}
+              </div>
+              <div className="flex gap-3">
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setDeleteBatchConfirm(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={async () => {
+                    const id = deleteBatchConfirm.id;
+                    setDeleteBatchConfirm(null);
+                    await deleteBatch(id);
+                  }}
+                  className="flex-1"
+                >
+                  Yes, Delete {(deleteBatchConfirm.items || []).length > 1 ? 'All' : 'It'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
 
       <Modal
         open={!!scheduleForId}
@@ -984,105 +1163,44 @@ function MyCampaigns() {
             {batchCalendarView && (
               <Calendar
                 events={(() => {
-                  console.log(`🔍 STARTING CALENDAR FILTER FOR BATCH: ${batchCalendarView}`);
+                console.log(`🔍 STARTING CALENDAR FILTER FOR BATCH: ${batchCalendarView}`);
 
                   // Get campaigns for this specific batch or individual campaign
                   const batchCampaigns = campaigns.filter(c => {
                     if (batchCalendarView === "single") {
                       return !c.batchId || c.batchId === null || c.batchId === undefined;
                     } else {
-                      // Check if batchCalendarView is a batchId or individual campaign ID
-                      return c.batchId === batchCalendarView || c.id === batchCalendarView;
+                      // More robust matching for batch ID
+                      const matchesBatchId = String(c.batchId) === String(batchCalendarView);
+                      const matchesId = String(c.id) === String(batchCalendarView);
+                      return matchesBatchId || matchesId;
                     }
                   });
 
-                  console.log(`📊 Found ${batchCampaigns.length} campaigns in this batch:`);
-                  batchCampaigns.forEach(c => {
-                    console.log(`  - Campaign ID: ${c.id}, Desc: "${c.productDescription}", BatchId: ${c.batchId}`);
-                  });
-
+                  console.log(`📊 Found ${batchCampaigns.length} campaigns for batch ${batchCalendarView}`);
                   if (batchCampaigns.length === 0) {
                     console.log(`⚠️ No campaigns found for batch ${batchCalendarView}`);
                     return [];
                   }
 
-                  // Create comprehensive matching strategies
-                  const batchCampaignIds = new Set();
-                  const batchDescriptions = new Set();
-
-                  batchCampaigns.forEach(c => {
-                    // Add various ID formats
-                    batchCampaignIds.add(String(c.id));
-                    batchCampaignIds.add(c.id); // Original format
-                    if (c.id && typeof c.id === 'number') {
-                      batchCampaignIds.add(c.id.toString());
-                    }
-
-                    // Add description for content matching
-                    if (c.productDescription) {
-                      batchDescriptions.add(c.productDescription.toLowerCase().trim());
-                    }
-                  });
-
-                  console.log(`🎯 Campaign IDs to match:`, Array.from(batchCampaignIds));
-                  console.log(`📝 Descriptions to match:`, Array.from(batchDescriptions));
-                  console.log(`📅 Total calendar events to filter:`, allCalendarEvents.length);
-
-                  // Enhanced filtering with multiple strategies
+                  // Simple and robust filtering by post_id
+                  const batchPostIds = new Set(batchCampaigns.map(c => String(c.id)));
+                  
                   const filteredEvents = allCalendarEvents.filter(event => {
-                    const eventPostId = event.post_id;
-                    const eventPostIdStr = String(eventPostId || '');
-                    const eventTitle = (event.title || '').toLowerCase();
-
-                    // Strategy 1: Direct ID matching (multiple formats)
-                    const directMatch = batchCampaignIds.has(eventPostId) ||
-                      batchCampaignIds.has(eventPostIdStr) ||
-                      batchCampaignIds.has(Number(eventPostId));
-
-                    // Strategy 2: Title content matching
-                    let contentMatch = false;
-                    if (!directMatch) {
-                      for (const desc of batchDescriptions) {
-                        if (desc && eventTitle.includes(desc.substring(0, 15))) {
-                          contentMatch = true;
-                          break;
-                        }
-                      }
-                    }
-
-                    // Strategy 3: Batch ID embedded in event metadata
-                    let metadataMatch = false;
-                    if (!directMatch && !contentMatch && event.metadata) {
-                      metadataMatch = event.metadata.batch_id === batchCalendarView;
-                    }
-
-                    const isMatch = directMatch || contentMatch || metadataMatch;
-
-                    console.log(`🔍 Event: "${event.title}" | post_id: ${eventPostId} | Match: ${isMatch} (direct: ${directMatch}, content: ${contentMatch}, metadata: ${metadataMatch})`);
-
-                    return isMatch;
+                    const eventPostId = String(event.post_id || '');
+                    return batchPostIds.has(eventPostId);
                   });
 
-                  console.log(`✅ FILTERED ${filteredEvents.length} events for batch ${batchCalendarView}`);
-                  if (filteredEvents.length > 0) {
-                    console.log(`📋 Filtered events:`);
-                    filteredEvents.forEach(e => console.log(`   - "${e.title}" (post_id: ${e.post_id})`));
-                  } else {
-                    console.log(`❌ NO EVENTS MATCHED - This might be why you're seeing all events`);
-                    console.log(`🔧 Troubleshooting:`);
-                    console.log(`   - Check if calendar events have correct post_id`);
-                    console.log(`   - Verify campaign IDs match event post_ids`);
-                    console.log(`   - Ensure batch assignment is correct`);
+                  console.log(`✅ Returning ${filteredEvents.length} filtered events for batch ${batchCalendarView}`);
+                  if (filteredEvents.length === 0) {
+                    console.log(`⚠️ No events found for this batch`);
                   }
-                  console.log(`🏁 END FILTER\n`);
 
-                  // FAILSAFE: Prevent showing all events if filtering completely fails
-                  // If we have campaigns in this batch but no matching events, return empty array
-                  // This prevents the common issue of showing all events when filtering fails
+                  // If no events matched but we have campaigns, there might be a data sync issue
                   if (batchCampaigns.length > 0 && filteredEvents.length === 0) {
-                    console.log(`🛡️ FAILSAFE: No events matched for batch with ${batchCampaigns.length} campaigns`);
-                    console.log(`📝 This prevents showing all events when filtering fails`);
-                    return []; // Return empty array instead of all events
+                    console.log(`❌ NO EVENTS MATCHED for batch with ${batchCampaigns.length} campaigns`);
+                    console.log(`🔧 This indicates calendar events may not be properly linked to posts`);
+                    return []; // Return empty array - don't show wrong events
                   }
 
                   return filteredEvents;

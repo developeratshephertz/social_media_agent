@@ -80,20 +80,104 @@ export default function IdeaGenerator() {
     const files = Array.from(e.target.files);
     if (type === 'trendMiner') {
       setTrendMinerFile(files[0]);
+      console.log('📄 Trend miner file selected:', files[0].name);
     } else if (type === 'brandAssets') {
       setBrandAssets(prev => ({ ...prev, files: [...prev.files, ...files] }));
+      console.log('🏢 Brand asset files selected:', files.length);
+    } else if (type === 'competitorAssets') {
+      setCompetitorAssets(prev => ({ 
+        ...prev, 
+        files: [...(prev.files || []), ...files] 
+      }));
+      console.log('🏪 Competitor asset files selected:', files.length);
     }
   };
 
   const [generatedIdeas, setGeneratedIdeas] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedIdea, setSelectedIdea] = useState(null);
   const [showIdeaModal, setShowIdeaModal] = useState(false);
+  const [selectedIdea, setSelectedIdea] = useState(null);
+  const [modalScrollTop, setModalScrollTop] = useState(0);
+
+  const uploadFilesToServer = async () => {
+    const uploadPromises = [];
+
+    // Upload trend miner file
+    if (trendMinerFile) {
+      console.log('📤 Uploading trend miner file:', trendMinerFile.name);
+      const formData = new FormData();
+      formData.append('files', trendMinerFile);
+      
+      uploadPromises.push(
+        fetch('/api/idea-generator/upload-files?file_type=trend_data', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+
+    // Upload brand assets files
+    if (brandAssets.files && brandAssets.files.length > 0) {
+      console.log('📤 Uploading brand asset files:', brandAssets.files.length);
+      const formData = new FormData();
+      brandAssets.files.forEach(file => {
+        formData.append('files', file);
+      });
+      
+      uploadPromises.push(
+        fetch('/api/idea-generator/upload-files?file_type=brand_assets', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+
+    // Upload competitor assets files
+    if (competitorAssets.files && competitorAssets.files.length > 0) {
+      console.log('📤 Uploading competitor asset files:', competitorAssets.files.length);
+      const formData = new FormData();
+      competitorAssets.files.forEach(file => {
+        formData.append('files', file);
+      });
+      
+      uploadPromises.push(
+        fetch('/api/idea-generator/upload-files?file_type=competitor_assets', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: formData
+        })
+      );
+    }
+
+    // Wait for all uploads to complete
+    if (uploadPromises.length > 0) {
+      const results = await Promise.all(uploadPromises);
+      console.log('✅ File uploads completed:', results.length);
+      
+      // Log any upload failures
+      for (let i = 0; i < results.length; i++) {
+        if (!results[i].ok) {
+          console.warn(`⚠️ Upload ${i+1} failed:`, results[i].status);
+        }
+      }
+    }
+  };
 
   const handleGenerateIdea = async () => {
     setIsGenerating(true);
     try {
-      // Prepare the request data
+      // Step 1: Upload files to server for analysis
+      await uploadFilesToServer();
+      
+      // Step 2: Prepare the request data
       const requestData = {
         age_range: ageRange,
         location: location || 'global',
@@ -107,7 +191,7 @@ export default function IdeaGenerator() {
         extra_information: extraInfo
       };
 
-      console.log('🚀 Sending idea generation request:', requestData);
+      console.log('🚀 Sending idea generation request with analysis:', requestData);
 
       const response = await fetch('/api/idea-generator/generate', {
         method: 'POST',
@@ -148,6 +232,7 @@ export default function IdeaGenerator() {
   };
 
   const handleExpandIdea = (idea) => {
+    setModalScrollTop(window.scrollY);
     setSelectedIdea(idea);
     setShowIdeaModal(true);
   };
@@ -496,7 +581,6 @@ export default function IdeaGenerator() {
             </div>
           </Card>
         </div>
-      </div>
 
       {/* Extra Information Card */}
       <Card title="Extra Information">
@@ -538,6 +622,7 @@ export default function IdeaGenerator() {
         >
           🗑️ Clear All
         </button>
+      </div>
       </div>
 
       {/* Generated Ideas Results */}
@@ -607,7 +692,7 @@ export default function IdeaGenerator() {
                   </button>
                   <button
                     onClick={() => handleCreateCampaign(idea)}
-                    className="flex-1 px-3 py-2 text-sm font-medium text-white bg-[var(--primary)] rounded-lg hover:bg-[var(--primary)]/90 transition-colors"
+                    className="flex-1 px-3 py-2 text-sm font-medium text-white bg-[var(--primary)] rounded-lg hover:bg-[var(--primary)] hover:opacity-90 transition-colors"
                   >
                     Create
                   </button>
@@ -616,115 +701,128 @@ export default function IdeaGenerator() {
             ))}
             </div>
 
-            {/* Modal positioned after the cards */}
-            {showIdeaModal && selectedIdea && (
-              <div className="mt-8 w-full max-w-4xl mx-auto">
-                <div className="bg-[var(--surface)] rounded-2xl shadow-2xl border border-[var(--border)] max-h-[80vh] overflow-hidden relative">
-                  {/* Close button overlay */}
-                  <div className="absolute top-4 right-4 z-10">
-                    <button
-                      onClick={() => setShowIdeaModal(false)}
-                      className="bg-[var(--surface)] hover:bg-[var(--bg-muted)] p-2 rounded-full shadow-lg border border-[var(--border)] transition-colors"
-                    >
-                      <svg className="w-5 h-5 text-[var(--text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  
-                  {/* Modal Header */}
-                  <div className="p-6 border-b border-[var(--border)] pr-16">
-                    <div>
-                      <h2 className="text-xl font-semibold text-[var(--text)] mb-2">{selectedIdea.title}</h2>
-                      <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
-                        <span>🔥 Trending Score: {selectedIdea.trending_score}%</span>
-                        <span>📊 Est. Engagement: {selectedIdea.estimated_engagement}/10</span>
-                        <span>⏰ {selectedIdea.best_time_to_post}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Modal Content */}
-                  <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
-                    <div className="space-y-6">
-                      {/* Description */}
-                      <div>
-                        <h3 className="font-semibold text-[var(--text)] mb-2">📝 Detailed Description</h3>
-                        <p className="text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap">{selectedIdea.description}</p>
-                      </div>
-
-                      {/* Why This Will Go Viral */}
-                      {selectedIdea.why_viral && (
-                        <div>
-                          <h3 className="font-semibold text-[var(--text)] mb-2">🚀 Why This Will Go Viral</h3>
-                          <p className="text-[var(--text-muted)] leading-relaxed">{selectedIdea.why_viral}</p>
-                        </div>
-                      )}
-
-                      {/* Execution Tips */}
-                      {selectedIdea.execution_tips && (
-                        <div>
-                          <h3 className="font-semibold text-[var(--text)] mb-2">💡 Execution Tips</h3>
-                          <ul className="space-y-1">
-                            {Array.isArray(selectedIdea.execution_tips) 
-                              ? selectedIdea.execution_tips.map((tip, idx) => (
-                                  <li key={idx} className="text-[var(--text-muted)] flex items-start gap-2">
-                                    <span className="text-[var(--primary)] mt-1">•</span>
-                                    <span>{tip}</span>
-                                  </li>
-                                ))
-                              : <li className="text-[var(--text-muted)]">{selectedIdea.execution_tips}</li>
-                            }
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Hashtags */}
-                      {selectedIdea.hashtags && selectedIdea.hashtags.length > 0 && (
-                        <div>
-                          <h3 className="font-semibold text-[var(--text)] mb-2"># Suggested Hashtags</h3>
-                          <div className="flex flex-wrap gap-2">
-                            {selectedIdea.hashtags.map((hashtag, idx) => (
-                              <span key={idx} className="px-3 py-1 bg-[var(--bg-muted)] text-[var(--primary)] text-sm rounded-full">
-                                {hashtag.startsWith('#') ? hashtag : `#${hashtag}`}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Target Audience */}
-                      <div>
-                        <h3 className="font-semibold text-[var(--text)] mb-2">🎯 Target Audience</h3>
-                        <p className="text-[var(--text-muted)]">{selectedIdea.target_audience}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Modal Footer */}
-                  <div className="flex gap-3 p-6 border-t border-[var(--border)] bg-[var(--bg-muted)]">
-                    <button
-                      onClick={() => setShowIdeaModal(false)}
-                      className="flex-1 px-4 py-2 text-[var(--text)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-muted)] transition-colors"
-                    >
-                      Close
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleCreateCampaign(selectedIdea);
-                        setShowIdeaModal(false);
-                      }}
-                      className="flex-1 px-4 py-2 text-white bg-[var(--primary)] rounded-lg hover:bg-[var(--primary)]/90 transition-colors font-medium"
-                    >
-                      Create Campaign
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+        </div>
         </div>
       )}
+      
+      {/* Modal Overlay */}
+      {showIdeaModal && selectedIdea && (
+        <div 
+          className="absolute z-50 p-4 pointer-events-none"
+          style={{
+            top: `${modalScrollTop}px`,
+            left: 0,
+            right: 0,
+            minHeight: '100vh'
+          }}
+        >
+          <div className="flex items-center justify-center min-h-screen">
+            <div 
+              className="bg-[var(--surface)] rounded-2xl shadow-2xl border border-[var(--border)] max-h-[90vh] w-full max-w-4xl overflow-hidden relative pointer-events-auto"
+            >
+            {/* Close button overlay */}
+            <div className="absolute top-4 right-4 z-10">
+              <button
+                onClick={() => setShowIdeaModal(false)}
+                className="bg-[var(--surface)] hover:bg-[var(--bg-muted)] p-2 rounded-full shadow-lg border border-[var(--border)] transition-colors"
+              >
+                <svg className="w-5 h-5 text-[var(--text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Modal Header */}
+            <div className="p-6 border-b border-[var(--border)] pr-16">
+              <div>
+                <h2 className="text-xl font-semibold text-[var(--text)] mb-2">{selectedIdea.title}</h2>
+                <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
+                  <span>🔥 Trending Score: {selectedIdea.trending_score}%</span>
+                  <span>📊 Est. Engagement: {selectedIdea.estimated_engagement}/10</span>
+                  <span>⏰ {selectedIdea.best_time_to_post}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+              <div className="space-y-6">
+                {/* Description */}
+                <div>
+                  <h3 className="font-semibold text-[var(--text)] mb-2">📝 Detailed Description</h3>
+                  <p className="text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap">{selectedIdea.description}</p>
+                </div>
+
+                {/* Why This Will Go Viral */}
+                {selectedIdea.why_viral && (
+                  <div>
+                    <h3 className="font-semibold text-[var(--text)] mb-2">🚀 Why This Will Go Viral</h3>
+                    <p className="text-[var(--text-muted)] leading-relaxed">{selectedIdea.why_viral}</p>
+                  </div>
+                )}
+
+                {/* Execution Tips */}
+                {selectedIdea.execution_tips && (
+                  <div>
+                    <h3 className="font-semibold text-[var(--text)] mb-2">💡 Execution Tips</h3>
+                    <ul className="space-y-1">
+                      {Array.isArray(selectedIdea.execution_tips) 
+                        ? selectedIdea.execution_tips.map((tip, idx) => (
+                            <li key={idx} className="text-[var(--text-muted)] flex items-start gap-2">
+                              <span className="text-[var(--primary)] mt-1">•</span>
+                              <span>{tip}</span>
+                            </li>
+                          ))
+                        : <li className="text-[var(--text-muted)]">{selectedIdea.execution_tips}</li>
+                      }
+                    </ul>
+                  </div>
+                )}
+
+                {/* Hashtags */}
+                {selectedIdea.hashtags && selectedIdea.hashtags.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-[var(--text)] mb-2"># Suggested Hashtags</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedIdea.hashtags.map((hashtag, idx) => (
+                        <span key={idx} className="px-3 py-1 bg-[var(--bg-muted)] text-[var(--primary)] text-sm rounded-full">
+                          {hashtag.startsWith('#') ? hashtag : `#${hashtag}`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Target Audience */}
+                <div>
+                  <h3 className="font-semibold text-[var(--text)] mb-2">🎯 Target Audience</h3>
+                  <p className="text-[var(--text-muted)]">{selectedIdea.target_audience}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex gap-3 p-6 border-t border-[var(--border)] bg-[var(--bg-muted)]">
+              <button
+                onClick={() => setShowIdeaModal(false)}
+                className="flex-1 px-4 py-2 text-[var(--text)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-muted)] transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  handleCreateCampaign(selectedIdea);
+                  setShowIdeaModal(false);
+                }}
+                className="flex-1 px-4 py-2 text-white bg-[var(--primary)] rounded-lg hover:bg-[var(--primary)] hover:opacity-90 transition-colors font-medium"
+              >
+                Create Campaign
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
     </div>
-  );
+  )
 }
