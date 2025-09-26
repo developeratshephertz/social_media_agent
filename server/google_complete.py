@@ -34,10 +34,13 @@ def get_google_flow():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Credentials.json not found. Please create it with your Google Cloud credentials."
         )
+    # Allow configuring redirect URI to avoid redirect_uri_mismatch
+    redirect_uri = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:8000/callback')
+    print(f"Using Google OAuth redirect URI: {redirect_uri}")
     flow = Flow.from_client_secrets_file(
         'Credentials.json',
         scopes=SCOPES,
-        redirect_uri='http://localhost:8000/callback'
+        redirect_uri=redirect_uri
     )
     return flow
 
@@ -80,18 +83,49 @@ async def google_callback(code: str, flow: Flow = Depends(get_google_flow)):
                             detail="Cannot clean up corrupted token file. Please check file permissions."
                         )
         
-        # Write token with atomic operation
+        # Write token with robust, cross-platform-safe logic
         temp_token_file = f"{TOKEN_FILE}.tmp"
         try:
+            # Ensure parent directory exists
+            token_dir = os.path.dirname(TOKEN_FILE) or "."
+            os.makedirs(token_dir, exist_ok=True)
+
+            # Write to temp file first
             with open(temp_token_file, 'w') as token:
                 token.write(credentials.to_json())
                 token.flush()  # Ensure data is written
                 os.fsync(token.fileno())  # Force write to disk
-            
-            # Atomic rename
-            os.replace(temp_token_file, TOKEN_FILE)
-            print("Successfully fetched and stored token.")
-            
+
+            # Try to move temp -> final, handling EBUSY on some host/volume setups
+            last_error = None
+            for attempt in range(5):
+                try:
+                    # Remove existing token file/dir if present
+                    if os.path.exists(TOKEN_FILE):
+                        if os.path.isdir(TOKEN_FILE):
+                            import shutil
+                            shutil.rmtree(TOKEN_FILE)
+                        else:
+                            os.remove(TOKEN_FILE)
+                    # Prefer atomic replace
+                    try:
+                        os.replace(temp_token_file, TOKEN_FILE)
+                    except Exception:
+                        # Fallback to move if replace not available
+                        import shutil
+                        shutil.move(temp_token_file, TOKEN_FILE)
+                    print("Successfully fetched and stored token.")
+                    last_error = None
+                    break
+                except Exception as e:
+                    last_error = e
+                    print(f"Warning: failed to finalize token file (attempt {attempt+1}/5): {e}")
+                    time.sleep(0.3 * (attempt + 1))
+
+            if last_error is not None:
+                # If still failing, raise detailed error
+                raise last_error
+
         except Exception as write_error:
             # Clean up temp file if write failed
             try:
@@ -111,9 +145,39 @@ async def google_callback(code: str, flow: Flow = Depends(get_google_flow)):
 
 @router.get("/google/status")
 async def get_google_status():
-    if os.path.exists(TOKEN_FILE):
-        return {"connected": True}
-    return {"connected": False}
+    """Report whether Google is actually connected.
+    We validate token.json contents (must be a file with a refresh_token),
+    not just existence, to avoid false positives.
+    """
+    try:
+        if not os.path.exists(TOKEN_FILE):
+            return {"connected": False}
+        if os.path.isdir(TOKEN_FILE):
+            # Corrupted state: a directory where a file should be
+            return {"connected": False, "error": "token_is_directory"}
+        # Try to parse token and check refresh_token
+        with open(TOKEN_FILE, "r") as f:
+            raw = f.read().strip() or "{}"
+            data = json.loads(raw)
+        has_refresh = bool(data.get("refresh_token"))
+        return {"connected": has_refresh}
+    except Exception as e:
+        # Any error -> treat as not connected
+        return {"connected": False, "error": str(e)}
+
+@router.post("/google/disconnect")
+async def disconnect_google():
+    """Remove token.json to fully disconnect Google account."""
+    try:
+        if os.path.exists(TOKEN_FILE):
+            if os.path.isdir(TOKEN_FILE):
+                import shutil
+                shutil.rmtree(TOKEN_FILE)
+            else:
+                os.remove(TOKEN_FILE)
+        return {"success": True, "message": "Disconnected from Google"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to disconnect: {e}")
 
 def get_google_service(service_name: str, version: str):
     creds = None

@@ -570,34 +570,73 @@ function Dashboard() {
                     const when = new Date(p.scheduled_at || p.scheduled_time || p.scheduledAt || p.start_time || p.start || 0);
                     const timeStr = isNaN(when.getTime()) ? '' : format(when, 'p');
 
-                    // Enhanced platform detection with multiple fallbacks
+                    // Enhanced platform detection with multiple fallbacks and better logic
                     let platforms = [];
+                    
+                    // Try to get platforms from various possible sources
                     if (Array.isArray(p.platforms) && p.platforms.length > 0) {
-                      platforms = p.platforms;
-                    } else if (p.platform) {
-                      platforms = [p.platform];
+                      platforms = p.platforms.filter(p => p && p.trim());
+                    } else if (p.platform && p.platform.trim()) {
+                      platforms = [p.platform.trim()];
+                    } else if (p.metadata && Array.isArray(p.metadata.platforms)) {
+                      platforms = p.metadata.platforms.filter(p => p && p.trim());
                     } else {
-                      // Default fallback - assume Instagram as most common
-                      platforms = ['Instagram'];
+                      // Try to extract from title or description if it contains platform info
+                      const text = (p.title || p.original_description || '').toLowerCase();
+                      if (text.includes('instagram')) platforms = ['Instagram'];
+                      else if (text.includes('facebook')) platforms = ['Facebook'];
+                      else if (text.includes('twitter')) platforms = ['Twitter'];
+                      else if (text.includes('reddit')) platforms = ['Reddit'];
+                      else if (text.includes('linkedin')) platforms = ['LinkedIn'];
+                      else platforms = ['Social Media']; // Generic fallback
                     }
 
                     const platformStr = platforms.map(platform => {
-                      // Capitalize and format platform names
-                      const formatted = platform.toLowerCase();
+                      // Capitalize and format platform names properly
+                      const clean = platform.toString().trim();
+                      const formatted = clean.toLowerCase();
                       switch (formatted) {
                         case 'facebook': return 'Facebook';
                         case 'instagram': return 'Instagram';
-                        case 'twitter': return 'Twitter';
+                        case 'twitter': case 'x': return 'Twitter';
                         case 'reddit': return 'Reddit';
                         case 'linkedin': return 'LinkedIn';
-                        default: return platform.charAt(0).toUpperCase() + platform.slice(1).toLowerCase();
+                        case 'tiktok': return 'TikTok';
+                        case 'youtube': return 'YouTube';
+                        case 'pinterest': return 'Pinterest';
+                        case 'snapchat': return 'Snapchat';
+                        default: return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
                       }
                     }).join(', ');
 
-                    const title = p.campaignName || p.campaign_name || p.original_description || `Post ${p.id}`;
+                    // Generate more meaningful title based on campaign data
+                    let campaignTitle = '';
+                    
+                    // Priority order for title selection:
+                    if (p.campaign_name && p.campaign_name.trim() && p.campaign_name !== 'Untitled Campaign') {
+                      campaignTitle = p.campaign_name.trim();
+                    } else if (p.campaignName && p.campaignName.trim()) {
+                      campaignTitle = p.campaignName.trim();
+                    } else if (p.title && p.title.trim()) {
+                      campaignTitle = p.title.trim();
+                    } else if (p.original_description && p.original_description.trim()) {
+                      const desc = p.original_description.trim();
+                      // Avoid showing UUID-like strings as titles
+                      if (desc.length > 10 && !desc.match(/^[a-f0-9-]{30,}$/i) && !desc.startsWith('Post ')) {
+                        campaignTitle = desc.length > 50 ? desc.substring(0, 50) + '...' : desc;
+                      } else {
+                        campaignTitle = 'Campaign Post';
+                      }
+                    } else if (p.caption && p.caption.trim()) {
+                      const cap = p.caption.trim();
+                      campaignTitle = cap.length > 30 ? cap.substring(0, 30) + '...' : cap;
+                    } else {
+                      campaignTitle = 'Social Media Campaign';
+                    }
+
                     return (
                       <div key={p.id} className="px-4 py-3 bg-[var(--surface)] rounded-md">
-                        <div className="text-base font-medium text-contrast mb-1">{title}</div>
+                        <div className="text-base font-medium text-contrast mb-1">{campaignTitle}</div>
                         <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
                           <span>{timeStr}</span>
                           <span className="flex items-center gap-1">

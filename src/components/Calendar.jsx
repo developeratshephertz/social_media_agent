@@ -83,8 +83,15 @@ const Calendar = (props) => {
 
   // 🔹 Prepare events
   const calendarEvents = useMemo(() => {
-    const eventsToUse = events.length > 0 ? events : backendEvents;
-    console.log("Processing calendar events:", { events, backendEvents, eventsToUse });
+    // If events prop is passed (even if empty), use it. Only fallback to backendEvents if no events prop provided.
+    const eventsToUse = props.events !== undefined ? events : backendEvents;
+    console.log("Processing calendar events:", { 
+      propsEventsDefined: props.events !== undefined, 
+      events: events.length, 
+      backendEvents: backendEvents.length, 
+      eventsToUse: eventsToUse.length 
+    });
+    
     const processedEvents = eventsToUse.map((event) => ({
       ...event,
       start: new Date(event.start_time || event.start),
@@ -105,7 +112,7 @@ const Calendar = (props) => {
     }));
     console.log("Processed calendar events:", processedEvents);
     return processedEvents;
-  }, [events, backendEvents]);
+  }, [events, backendEvents, props.events]);
 
   // 🔹 Toolbar
   const CustomToolbar = ({ label, onNavigate, onView }) => (

@@ -152,11 +152,8 @@ class AuthService:
     def verify_jwt_token(self, token: str) -> Dict[str, Any]:
         """Verify JWT token and return payload"""
         try:
-            print(f"🔍 Verifying JWT token with secret: {self.jwt_secret[:20]}...")
-            print(f"🔍 Token to verify: {token[:50]}...")
-            
+            # Removed verbose logging for successful token verifications to reduce log spam
             payload = jwt.decode(token, self.jwt_secret, algorithms=[self.jwt_algorithm])
-            print(f"✅ JWT token decoded successfully: {payload}")
             return payload
         except jwt.ExpiredSignatureError as e:
             print(f"❌ JWT token expired: {str(e)}")
@@ -180,14 +177,9 @@ class AuthService:
     async def get_current_user(self, token: str) -> User:
         """Get current user from JWT token"""
         try:
-            print(f"🔍 get_current_user called with token: {token[:50]}...")
-            
-            # Verify the JWT token
+            # Verify the JWT token (logging reduced to prevent spam)
             payload = self.verify_jwt_token(token)
-            print(f"✅ JWT token verified, payload: {payload}")
-            
             user_id = payload.get("user_id")
-            print(f"🔍 Extracted user_id: {user_id}")
             
             if not user_id:
                 print("❌ No user_id in token payload")
@@ -205,7 +197,12 @@ class AuthService:
                     detail="User not found"
                 )
             
-            print(f"✅ User found: {user.email}")
+            # Only log successful user lookups every 100th time to reduce spam
+            # while still providing some visibility into system activity
+            import random
+            if random.randint(1, 100) == 1:
+                print(f"✅ User authenticated: {user.email}")
+            
             return user
             
         except HTTPException as e:

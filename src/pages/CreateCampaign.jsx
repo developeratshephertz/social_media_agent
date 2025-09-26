@@ -902,7 +902,7 @@ function CreateCampaign() {
         }));
 
         try {
-          // Step 1: Update the existing post in the database with distributed schedule time
+          // Step 1: Use robust backend scheduling endpoint that automatically creates calendar events
           const scheduled_at = scheduleTimes[i]; // Use individual schedule time for each post
           const updateData = {
             scheduled_at: scheduled_at,
@@ -911,9 +911,33 @@ function CreateCampaign() {
             subreddit: selectedPlatforms.includes("reddit") ? subreddit : null
           };
 
-          console.log(`Updating campaign ${post.id} in database:`, updateData);
-          await apiClient.updatePost(post.id, updateData);
-          console.log(`Campaign ${post.id} updated in database`);
+          console.log(`Scheduling campaign ${post.id} with robust endpoint:`, updateData);
+          try {
+            const response = await fetch(`/api/posts/${post.id}/schedule`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updateData)
+            });
+            
+            if (response.ok) {
+              const scheduleData = await response.json();
+              if (scheduleData.success) {
+                console.log(`✅ Campaign ${post.id} scheduled with automatic calendar event creation`);
+              } else {
+                console.error(`❌ Failed to schedule campaign ${post.id}:`, scheduleData.error);
+                throw new Error(scheduleData.error || 'Scheduling failed');
+              }
+            } else {
+              const errorText = await response.text();
+              console.error(`❌ Failed to schedule campaign ${post.id}: ${response.status} - ${errorText}`);
+              throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+          } catch (scheduleError) {
+            console.error(`❌ Schedule error for campaign ${post.id}:`, scheduleError);
+            // Fall back to old method if new endpoint fails
+            console.log(`Falling back to old scheduling method for ${post.id}`);
+            await apiClient.updatePost(post.id, updateData);
+          }
 
           // Step 2: Upload to Google Drive (skip if it fails)
           try {
@@ -942,23 +966,6 @@ function CreateCampaign() {
             }
           } catch (driveError) {
             console.warn("Google Drive upload failed (non-blocking):", driveError);
-          }
-
-          // Step 3: Create calendar event (skip if it fails)
-          try {
-            const calendarData = {
-              title: campaignName?.trim() ? campaignName.trim() : `Post: ${post.productDescription?.slice(0, 50)}...`,
-              description: post.generatedContent || post.caption,
-              start_time: scheduled_at,
-              end_time: scheduled_at,
-              post_id: post.id, // Use the existing post ID
-              platforms: selectedPlatforms,
-              imageUrl: post.imageUrl
-            };
-
-            await apiClient.createCalendarEvent(calendarData);
-          } catch (calendarError) {
-            console.warn("Calendar event creation failed (non-blocking):", calendarError);
           }
 
           // Step 4: Schedule to platforms (skip if it fails)

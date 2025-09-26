@@ -33,7 +33,7 @@ export const useCampaignStore = create((set, get) => ({
           generatedContent: post.caption || "",
           scheduledAt: post.scheduled_at,
           status: post.scheduled_at && (post.status === "scheduled" || post.status === "Scheduled") ? "Scheduled" :
-            (post.status === "posted" || post.status === "Posted") ? "Posted" :
+            (post.status === "posted" || post.status === "Posted" || post.status === "published" || post.status === "Published") ? "Posted" :
               (post.status === "failed" || post.status === "Failed") ? "Failed" : "Draft",
           imageUrl: post.image_path ? apiUrl(post.image_path) : "",
           // Add additional fields from database if they exist
@@ -323,9 +323,14 @@ export const useCampaignStore = create((set, get) => ({
     })),
   deleteCampaign: async (id) => {
     const prev = get().campaigns;
+    // Get campaign name before deleting
+    const campaign = prev.find(c => c.id === id);
+    const campaignName = campaign ? (campaign.campaignName || campaign.productDescription || 'Unknown Campaign') : 'Unknown Campaign';
+    
     // Optimistic remove from local state
     set((state) => ({ campaigns: state.campaigns.filter((c) => c.id !== id) }));
-    get().addActivity(`Deleted campaign ${id}`);
+    get().addActivity(`Deleted campaign "${campaignName}"`);
+    
     // Attempt backend delete; ignore if the id was only local (e.g., cmp_*)
     try {
       const resp = await apiClient.deletePost(id);

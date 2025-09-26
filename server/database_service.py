@@ -477,7 +477,7 @@ class DatabaseService:
         """Get all posts for a specific batch ID"""
         try:
             query = """
-                SELECT p.id, p.original_description, p.caption, p.image_path,
+                SELECT p.id, p.user_id, p.original_description, p.caption, p.image_path,
                        p.status, p.platforms, p.scheduled_at, p.created_at, p.batch_id,
                        COALESCE(p.campaign_name, c.name, 'Untitled Campaign') as campaign_name
                 FROM posts p
@@ -498,7 +498,8 @@ class DatabaseService:
         batch_id: str,
         platforms: List[str],
         schedule_times: List[str],
-        days: int
+        days: int,
+        user_id: str = None  # 🔧 Accept user_id parameter
     ) -> bool:
         """Schedule all posts in a batch with specified platforms and times"""
         try:
@@ -532,6 +533,43 @@ class DatabaseService:
                         scheduled_at=scheduled_at,
                         platforms=platforms
                     )
+                    
+                    # 🔧 FIX: Create calendar event for scheduled post
+                    try:
+                        # Create meaningful title from campaign name or description
+                        event_title = ''
+                        if post.get('campaign_name') and post['campaign_name'].strip() and post['campaign_name'] != 'Untitled Campaign':
+                            event_title = post['campaign_name'].strip()
+                        elif post.get('original_description') and len(post['original_description'].strip()) > 10:
+                            desc = post['original_description'].strip()
+                            # Avoid UUID-like strings
+                            if not (desc.startswith('Post ') and len(desc.split('-')) > 3):
+                                event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                            else:
+                                event_title = "Campaign Post"
+                        elif post.get('caption') and post['caption'].strip():
+                            caption = post['caption'].strip()
+                            event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+                        else:
+                            event_title = "Social Media Campaign"
+                        
+                        # Create calendar event
+                        await DatabaseService.create_calendar_event(
+                            post_id=post['id'],
+                            user_id=user_id or post.get('user_id', '00000000-0000-0000-0000-000000000000'),  # 🔧 Use passed user_id first
+                            title=event_title,
+                            description=post.get('caption', '') or post.get('original_description', ''),
+                            start_time=datetime.fromisoformat(scheduled_at.replace('Z', '+00:00')) if isinstance(scheduled_at, str) else scheduled_at,
+                            end_time=datetime.fromisoformat(scheduled_at.replace('Z', '+00:00')) if isinstance(scheduled_at, str) else scheduled_at,
+                            status='scheduled',
+                            platforms=platforms
+                        )
+                        
+                        print(f"✅ Created calendar event for post {post['id']}: {event_title}")
+                        
+                    except Exception as calendar_error:
+                        print(f"⚠️ Warning: Failed to create calendar event for post {post['id']}: {calendar_error}")
+                        # Don't fail the entire scheduling operation if calendar event creation fails
             
             return True
             
@@ -710,6 +748,71 @@ class DatabaseService:
             
         except Exception as e:
             print(f"Error clearing all posts: {e}")
+            return False
+    
+    @staticmethod
+    async def update_post_schedule(
+        post_id: str,
+        scheduled_at: datetime,
+        status: str = "scheduled",
+        platforms: List[str] = None
+    ) -> bool:
+        """Update a post's schedule and create calendar event if needed"""
+        try:
+            # Update the post
+            update_query = """
+                UPDATE posts 
+                SET scheduled_at = :scheduled_at, status = :status, platforms = :platforms
+                WHERE id = :post_id
+                RETURNING id, user_id, campaign_name, original_description, caption
+            """
+            
+            result = await db_manager.fetch_one(update_query, {
+                "post_id": post_id,
+                "scheduled_at": scheduled_at,
+                "status": status,
+                "platforms": platforms
+            })
+            
+            if not result:
+                return False
+            
+            # Create calendar event if user_id exists
+            if result['user_id']:
+                # Check if calendar event already exists
+                existing_event_query = "SELECT id FROM calendar_events WHERE post_id = :post_id"
+                existing_event = await db_manager.fetch_one(existing_event_query, {"post_id": post_id})
+                
+                if not existing_event:
+                    # Create meaningful title from campaign name or description
+                    event_title = ''
+                    if result['campaign_name'] and result['campaign_name'].strip():
+                        event_title = result['campaign_name'].strip()
+                    elif result['original_description'] and len(result['original_description'].strip()) > 10:
+                        desc = result['original_description'].strip()
+                        event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                    elif result['caption'] and result['caption'].strip():
+                        caption = result['caption'].strip()
+                        event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+                    else:
+                        event_title = "Social Media Post"
+                    
+                    await DatabaseService.create_calendar_event(
+                        post_id=post_id,
+                        user_id=str(result['user_id']),
+                        title=event_title,
+                        description=result['caption'] or result['original_description'] or "",
+                        start_time=scheduled_at,
+                        end_time=scheduled_at,
+                        status=status,
+                        platforms=platforms or []
+                    )
+                    print(f"✅ Created calendar event for post {post_id}: {event_title}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating post schedule: {e}")
             return False
     
     @staticmethod
