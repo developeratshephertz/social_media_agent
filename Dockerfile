@@ -53,5 +53,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Start command
-CMD ["python", "main.py"]
+# Copy startup script
+COPY server/startup.sh ./startup.sh
+RUN chmod +x ./startup.sh
+
+# Start command with Reddit auto-setup
+CMD ["./startup.sh"]

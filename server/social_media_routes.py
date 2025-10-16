@@ -8,7 +8,7 @@ import os
 # Import platform adapters
 from facebook_manager import facebook_manager
 from twitter_adapter import TwitterAdapter  
-from reddit_adapter import RedditAPI
+from reddit_service import reddit_service
 from env_manager import env_manager
 
 router = APIRouter(prefix="/social-media", tags=["social-media"])
@@ -96,24 +96,13 @@ async def test_reddit_connection() -> Dict[str, Any]:
         if not creds['has_credentials']:
             return {"connected": False, "error": "Missing required credentials"}
         
-        # Use existing RedditAPI to test connection
-        reddit_adapter = RedditAPI()
+        # Use reddit_service to test connection
+        status = reddit_service.get_service_status()
         
-        client_id = os.getenv('REDDIT_CLIENT_ID')
-        client_secret = os.getenv('REDDIT_CLIENT_SECRET')
-        username = os.getenv('REDDIT_USERNAME')
-        password = os.getenv('REDDIT_PASSWORD')
-        
-        if not all([client_id, client_secret, username, password]):
-            return {"connected": False, "error": "Missing required Reddit credentials"}
-            
-        return {
-            "connected": True,
-            "details": {
-                "client_id": client_id[:10] + "...",
-                "username": username
-            }
-        }
+        if status['status'] == 'connected':
+            return {"connected": True, "message": status['message']}
+        else:
+            return {"connected": False, "error": status['message']}
         
     except Exception as e:
         return {"connected": False, "error": str(e)}

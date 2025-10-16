@@ -6,9 +6,10 @@ Integrates Reddit posting functionality into the main social media agent
 import os
 import logging
 import json
+import requests
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
-from reddit_adapter import RedditAPI
+from reddit_token_refresh import RedditTokenRefresh
 
 logger = logging.getLogger(__name__)
 
@@ -19,336 +20,171 @@ class RedditService:
         """Initialize Reddit service"""
         self.adapter = None
         self.schedule_file = "reddit_scheduled_posts.json"
+        
+        # Initialize token refresh service
+        self.token_service = RedditTokenRefresh()
+        
+        # Reddit API base URL
+        self.api_base = "https://oauth.reddit.com"
+        
         self._initialize_adapter()
-    
+
     def _initialize_adapter(self):
-        """Initialize the Reddit adapter"""
+        """Initialize Reddit adapter with token management"""
         try:
-            self.adapter = RedditAPI()
-            
-            # Test connection with automatic token refresh
-            connection = self.adapter.test_connection()
-            if "error" in connection:
-                logger.warning(f"Reddit connection failed: {connection['error']}")
-                # Don't set adapter to None - let it try during actual posting
+            # Test connection and refresh token if needed
+            if self.token_service.test_connection():
+                logger.info("✅ Reddit service initialized successfully")
+                self.adapter = True
             else:
-                logger.info("Reddit service initialized successfully")
-                
+                logger.error("❌ Failed to initialize Reddit service")
+                self.adapter = False
         except Exception as e:
-            logger.error(f"Failed to initialize Reddit adapter: {e}")
-            # Don't set adapter to None - let it try during actual posting
-    
-    def is_configured(self) -> bool:
-        """Check if Reddit service is properly configured"""
-        return self.adapter is not None
-    
-    def post_to_reddit(self, title: str, content: str, subreddit: str = "test", image_path: str = None) -> Dict[str, Any]:
-        """
-        Post content to Reddit
-        
-        Args:
-            title: Post title (max 300 characters)
-            content: Post content
-            subreddit: Target subreddit (default: test)
-            image_path: Path to image file to upload with post
-            
-        Returns:
-            Dictionary with posting result
-        """
-        if not self.is_configured():
-            return {
-                "success": False,
-                "error": "Reddit service not configured or connection failed"
-            }
-        
+            logger.error(f"❌ Failed to initialize Reddit service: {e}")
+            self.adapter = False
+
+    def _get_headers(self) -> dict:
+        """Get headers with valid access token"""
+        return self.token_service.get_headers()
+
+    def test_connection(self) -> Dict[str, Any]:
+        """Test Reddit connection"""
         try:
-            # Validate inputs
-            if not title or not title.strip():
-                return {"success": False, "error": "Title cannot be empty"}
+            if self.token_service.test_connection():
+                return {"status": "connected", "message": "Reddit connection successful"}
+            else:
+                return {"status": "disconnected", "message": "Reddit connection failed"}
+        except Exception as e:
+            return {"status": "error", "message": f"Reddit connection error: {e}"}
+
+    def post_to_reddit(self, title: str, content: str, subreddit: str = "test") -> Dict[str, Any]:
+        """Post content to Reddit"""
+        try:
+            if not self.adapter:
+                return {"success": False, "message": "Reddit service not initialized"}
+
+            headers = self._get_headers()
             
-            if not content or not content.strip():
-                return {"success": False, "error": "Content cannot be empty"}
-            
-            if len(title) > 300:
-                return {"success": False, "error": f"Title too long ({len(title)}/300 characters)"}
-            
-            # Handle media upload if image provided
-            media_url = None
-            post_type = "self"
-            
-            if image_path:
-                logger.info(f"Processing image path: {image_path}")
-                if os.path.exists(image_path):
-                    logger.info(f"Image file exists, uploading media: {image_path}")
-                    media_url = self.adapter.upload_media(image_path)
-                    if media_url:
-                        # Determine post type based on file extension
-                        file_extension = os.path.splitext(image_path)[1].lower()
-                        if file_extension in ['.mp4', '.mov', '.avi', '.mkv']:
-                            post_type = "video"
-                        else:
-                            post_type = "image"
-                        logger.info(f"✅ Media uploaded successfully: {media_url} (type: {post_type})")
-                    else:
-                        logger.error(f"❌ Failed to upload media: {image_path}")
-                        logger.error("This will result in a text-only post")
+            # Prepare post data
+            post_data = {
+                'sr': subreddit,
+                'kind': 'self',
+                'text': content,
+                'title': title
+            }
+
+            # Submit post
+            response = requests.post(
+                f"{self.api_base}/api/submit",
+                headers=headers,
+                data=post_data,
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    post_url = f"https://reddit.com{result['data']['url']}"
+                    return {
+                        "success": True,
+                        "message": "Post submitted successfully",
+                        "url": post_url,
+                        "post_id": result['data']['id']
+                    }
                 else:
-                    logger.warning(f"Image file not found: {image_path}")
-            
-            # Create the post
-            result = self.adapter.create_post(
-                subreddit=subreddit, 
-                title=title, 
-                content=content, 
-                post_type=post_type,
-                media_url=media_url
-            )
-            
-            if "error" in result:
+                    return {
+                        "success": False,
+                        "message": f"Reddit API error: {result.get('errors', 'Unknown error')}"
+                    }
+            else:
                 return {
                     "success": False,
-                    "error": f"Reddit API error: {result['error']}"
+                    "message": f"HTTP error: {response.status_code} - {response.text}"
                 }
-            
-            # Extract post details
-            post_id = None
-            post_url = None
-            
-            if "json" in result and "data" in result["json"]:
-                data = result["json"]["data"]
-                post_id = data.get("id")
-                post_url = data.get("url")
-            
-            return {
-                "success": True,
-                "post_id": post_id,
-                "platform": "reddit",
-                "subreddit": subreddit,
-                "url": post_url,
-                "media_uploaded": media_url is not None,
-                "media_url": media_url,
-                "post_type": post_type,
-                "posted_at": datetime.now(timezone.utc).isoformat()
-            }
-            
+
         except Exception as e:
-            logger.error(f"Error posting to Reddit: {e}")
-            return {
-                "success": False,
-                "error": f"Unexpected error: {str(e)}"
-            }
-    
-    def schedule_reddit_post(self, title: str, content: str, scheduled_time: str, 
-                           subreddit: str = "test") -> Dict[str, Any]:
-        """
-        Schedule a Reddit post for later publishing
-        
-        Args:
-            title: Post title
-            content: Post content
-            scheduled_time: ISO format datetime string
-            subreddit: Target subreddit
-            
-        Returns:
-            Dictionary with scheduling result
-        """
+            logger.error(f"❌ Error posting to Reddit: {e}")
+            return {"success": False, "message": f"Posting error: {e}"}
+
+    def get_reddit_analytics(self, post_id: str = None) -> Dict[str, Any]:
+        """Get Reddit analytics for a post"""
         try:
-            # Generate unique ID
-            post_id = f"reddit_schedule_{int(datetime.now().timestamp())}"
+            if not self.adapter:
+                return {"success": False, "message": "Reddit service not initialized"}
+
+            headers = self._get_headers()
             
-            # Create scheduled post object
-            scheduled_post = {
-                "id": post_id,
-                "subreddit": subreddit,
-                "title": title,
-                "content": content,
-                "post_type": "self",
-                "url": None,
-                "scheduled_time": scheduled_time,
-                "status": "scheduled",
-                "created_at": datetime.now().isoformat(),
-                "post_id": None,
-                "published": False
-            }
-            
-            # Load existing scheduled posts
-            scheduled_posts = self._load_scheduled_posts()
-            
-            # Add new post
-            scheduled_posts.append(scheduled_post)
-            
-            # Save back to file
-            self._save_scheduled_posts(scheduled_posts)
-            
-            return {
-                "success": True,
-                "post_id": post_id,
-                "scheduled_time": scheduled_time,
-                "message": f"Reddit post scheduled for {scheduled_time}"
-            }
-            
-        except Exception as e:
-            logger.error(f"Error scheduling Reddit post: {e}")
-            return {
-                "success": False,
-                "error": f"Failed to schedule post: {str(e)}"
-            }
-    
-    def get_scheduled_posts(self) -> Dict[str, Any]:
-        """Get all scheduled Reddit posts"""
-        try:
-            posts = self._load_scheduled_posts()
-            return {
-                "success": True,
-                "posts": posts,
-                "count": len(posts)
-            }
-        except Exception as e:
-            logger.error(f"Error loading scheduled posts: {e}")
-            return {
-                "success": False,
-                "error": f"Failed to load scheduled posts: {str(e)}"
-            }
-    
-    def publish_scheduled_post(self, post_id: str) -> Dict[str, Any]:
-        """
-        Publish a scheduled Reddit post
-        
-        Args:
-            post_id: ID of the scheduled post
-            
-        Returns:
-            Dictionary with publishing result
-        """
-        if not self.is_configured():
-            return {
-                "success": False,
-                "error": "Reddit service not configured"
-            }
-        
-        try:
-            # Load scheduled posts
-            posts = self._load_scheduled_posts()
-            
-            # Find the post
-            post = None
-            for p in posts:
-                if p.get("id") == post_id:
-                    post = p
-                    break
-            
-            if not post:
-                return {
-                    "success": False,
-                    "error": f"Scheduled post {post_id} not found"
-                }
-            
-            # Publish the post
-            result = self.post_to_reddit(
-                title=post["title"],
-                content=post["content"],
-                subreddit=post["subreddit"]
-            )
-            
-            if result["success"]:
-                # Update the scheduled post
-                post["status"] = "published"
-                post["published"] = True
-                post["published_at"] = result["posted_at"]
-                post["post_id"] = result["post_id"]
-                post["post_url"] = result["url"]
+            # Get user's recent posts if no post_id provided
+            if not post_id:
+                response = requests.get(
+                    f"{self.api_base}/user/SuspiciousPapaya3497/submitted",
+                    headers=headers,
+                    timeout=10
+                )
+            else:
+                response = requests.get(
+                    f"{self.api_base}/api/info",
+                    headers=headers,
+                    params={'id': f't3_{post_id}'},
+                    timeout=10
+                )
+
+            if response.status_code == 200:
+                data = response.json()
+                posts = data.get('data', {}).get('children', [])
                 
-                # Save updated posts
-                self._save_scheduled_posts(posts)
+                analytics = []
+                for post in posts:
+                    post_data = post.get('data', {})
+                    analytics.append({
+                        'title': post_data.get('title'),
+                        'score': post_data.get('score', 0),
+                        'upvote_ratio': post_data.get('upvote_ratio', 0),
+                        'num_comments': post_data.get('num_comments', 0),
+                        'created_utc': post_data.get('created_utc'),
+                        'url': f"https://reddit.com{post_data.get('permalink', '')}"
+                    })
                 
                 return {
                     "success": True,
-                    "post_id": result["post_id"],
-                    "url": result["url"],
-                    "message": "Reddit post published successfully"
+                    "analytics": analytics,
+                    "message": f"Retrieved {len(analytics)} posts"
                 }
             else:
-                return result
-                
-        except Exception as e:
-            logger.error(f"Error publishing scheduled Reddit post: {e}")
-            return {
-                "success": False,
-                "error": f"Failed to publish post: {str(e)}"
-            }
-    
-    def get_reddit_analytics(self, post_id: str) -> Dict[str, Any]:
-        """
-        Get analytics for a Reddit post
-        
-        Args:
-            post_id: Reddit post ID
-            
-        Returns:
-            Dictionary with analytics data
-        """
-        if not self.is_configured():
-            return {
-                "success": False,
-                "error": "Reddit service not configured"
-            }
-        
-        try:
-            analytics = self.adapter.get_post_analytics(post_id)
-            
-            if "error" in analytics:
                 return {
                     "success": False,
-                    "error": f"Analytics error: {analytics['error']}"
+                    "message": f"HTTP error: {response.status_code} - {response.text}"
                 }
-            
-            return {
-                "success": True,
-                "analytics": analytics
-            }
-            
+
         except Exception as e:
-            logger.error(f"Error getting Reddit analytics: {e}")
-            return {
-                "success": False,
-                "error": f"Failed to get analytics: {str(e)}"
-            }
-    
-    def _load_scheduled_posts(self) -> list:
-        """Load scheduled posts from JSON file"""
-        try:
-            if not os.path.exists(self.schedule_file):
-                return []
-            
-            with open(self.schedule_file, 'r') as f:
-                data = json.load(f)
-            
-            return data.get("scheduled_posts", [])
-            
-        except Exception as e:
-            logger.error(f"Error loading scheduled posts: {e}")
-            return []
-    
-    def _save_scheduled_posts(self, posts: list):
-        """Save scheduled posts to JSON file"""
-        try:
-            with open(self.schedule_file, 'w') as f:
-                json.dump({"scheduled_posts": posts}, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving scheduled posts: {e}")
-    
+            logger.error(f"❌ Error getting Reddit analytics: {e}")
+            return {"success": False, "message": f"Analytics error: {e}"}
+
     def get_service_status(self) -> Dict[str, Any]:
-        """Get Reddit service status"""
-        return {
-            "configured": self.is_configured(),
-            "adapter_available": self.adapter is not None,
-            "schedule_file": self.schedule_file,
-            "scheduled_posts_count": len(self._load_scheduled_posts())
-        }
+        """Get the current status of the Reddit service"""
+        try:
+            if not all([self.token_service.client_id, self.token_service.client_secret, self.token_service.refresh_token]):
+                return {
+                    "status": "disconnected",
+                    "message": "Missing Reddit credentials. Please set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, and REDDIT_REFRESH_TOKEN environment variables."
+                }
 
+            if self.token_service.test_connection():
+                return {
+                    "status": "connected",
+                    "message": "Reddit service is ready",
+                    "auto_refresh": "Access token will auto-refresh when needed"
+                }
+            else:
+                return {
+                    "status": "disconnected", 
+                    "message": "Reddit connection failed"
+                }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Reddit service error: {e}"
+            }
 
-# Global Reddit service instance
+# Create global instance
 reddit_service = RedditService()
-
-
-

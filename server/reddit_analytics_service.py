@@ -10,10 +10,7 @@ import requests
 import json
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+# Environment variables are loaded by the system
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -28,12 +25,14 @@ class RedditAnalyticsService:
         self.client_secret = os.getenv('REDDIT_CLIENT_SECRET')
         self.access_token = os.getenv('REDDIT_ACCESS_TOKEN')
         self.refresh_token = os.getenv('REDDIT_REFRESH_TOKEN')
+        
+        # Tokens are loaded from environment variables only
         self.username = os.getenv('REDDIT_USERNAME', 'shephertz01')
         self.user_agent = os.getenv('REDDIT_USER_AGENT', 'shephertz/1.0')
         
         self.base_url = "https://oauth.reddit.com"
         self.auth_url = "https://www.reddit.com/api/v1/access_token"
-        
+    
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for API requests"""
         return {
