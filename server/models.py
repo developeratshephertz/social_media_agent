@@ -11,11 +11,35 @@ from sqlalchemy.sql import func
 from database import Base
 
 
+class User(Base):
+    """User model for authentication"""
+    __tablename__ = "users"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    google_id = Column(String(255), unique=True, nullable=False)
+    email = Column(String(255), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    picture_url = Column(String(500))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    is_active = Column(Boolean, default=True)
+    
+    # Relationships
+    campaigns = relationship("Campaign", back_populates="user", cascade="all, delete-orphan")
+    posts = relationship("Post", back_populates="user", cascade="all, delete-orphan")
+    batch_operations = relationship("BatchOperation", back_populates="user", cascade="all, delete-orphan")
+    calendar_events = relationship("CalendarEvent", back_populates="user", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<User(id={self.id}, email={self.email}, name={self.name})>"
+
+
 class Campaign(Base):
     """Campaign model for grouping related posts"""
     __tablename__ = "campaigns"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -23,6 +47,7 @@ class Campaign(Base):
     is_active = Column(Boolean, default=True)
     
     # Relationships
+    user = relationship("User", back_populates="campaigns")
     posts = relationship("Post", back_populates="campaign", cascade="all, delete-orphan")
     
     def __repr__(self):
@@ -34,6 +59,7 @@ class Post(Base):
     __tablename__ = "posts"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id"), nullable=True)
     original_description = Column(Text, nullable=False)
     caption = Column(Text)
@@ -47,8 +73,10 @@ class Post(Base):
     engagement_metrics = Column(JSON)  # Store engagement data as JSON
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    campaign_name = Column(String(255), nullable=True)
     
     # Relationships
+    user = relationship("User", back_populates="posts")
     campaign = relationship("Campaign", back_populates="posts")
     images = relationship("Image", back_populates="post", cascade="all, delete-orphan")
     captions = relationship("Caption", back_populates="post", cascade="all, delete-orphan")
@@ -135,6 +163,7 @@ class BatchOperation(Base):
     __tablename__ = "batch_operations"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     description = Column(Text, nullable=False)
     num_posts = Column(Integer, nullable=False)
     days_duration = Column(Integer, nullable=False)
@@ -146,6 +175,9 @@ class BatchOperation(Base):
     completed_at = Column(DateTime(timezone=True))
     created_by = Column(String(100))  # user identifier
     
+    # Relationships
+    user = relationship("User", back_populates="batch_operations")
+    
     def __repr__(self):
         return f"<BatchOperation(id={self.id}, status={self.status}, posts={self.posts_generated}/{self.num_posts})>"
 
@@ -155,6 +187,7 @@ class CalendarEvent(Base):
     __tablename__ = "calendar_events"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     post_id = Column(UUID(as_uuid=True), ForeignKey("posts.id"), nullable=True)
     title = Column(String(255), nullable=False)
     description = Column(Text)
@@ -175,6 +208,7 @@ class CalendarEvent(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
+    user = relationship("User", back_populates="calendar_events")
     post = relationship("Post", backref="calendar_events")
     
     def __repr__(self):
@@ -187,6 +221,34 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
+class UserResponse(BaseModel):
+    id: str
+    google_id: str
+    email: str
+    name: str
+    picture_url: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+    
+    @classmethod
+    def from_orm(cls, obj):
+        """Convert SQLAlchemy object to Pydantic model with proper type conversion"""
+        return cls(
+            id=str(obj.id),
+            google_id=obj.google_id,
+            email=obj.email,
+            name=obj.name,
+            picture_url=obj.picture_url,
+            is_active=obj.is_active,
+            created_at=obj.created_at,
+            updated_at=obj.updated_at
+        )
+
+
 class CampaignResponse(BaseModel):
     id: str
     name: str
@@ -197,6 +259,18 @@ class CampaignResponse(BaseModel):
     
     class Config:
         from_attributes = True
+    
+    @classmethod
+    def from_orm(cls, obj):
+        """Convert SQLAlchemy object to Pydantic model with proper type conversion"""
+        return cls(
+            id=str(obj.id),
+            name=obj.name,
+            description=obj.description,
+            is_active=obj.is_active,
+            created_at=obj.created_at,
+            updated_at=obj.updated_at
+        )
 
 
 class ImageResponse(BaseModel):
@@ -272,6 +346,28 @@ class PostResponse(BaseModel):
     
     class Config:
         from_attributes = True
+    
+    @classmethod
+    def from_orm(cls, obj):
+        """Convert SQLAlchemy object to Pydantic model with proper type conversion"""
+        return cls(
+            id=str(obj.id),
+            campaign_id=str(obj.campaign_id) if obj.campaign_id else None,
+            original_description=obj.original_description,
+            caption=obj.caption,
+            image_path=obj.image_path,
+            image_url=obj.image_url,
+            scheduled_at=obj.scheduled_at,
+            posted_at=obj.posted_at,
+            status=obj.status,
+            platforms=obj.platforms,
+            engagement_metrics=obj.engagement_metrics,
+            created_at=obj.created_at,
+            updated_at=obj.updated_at,
+            images=[],
+            captions=[],
+            posting_schedules=[]
+        )
 
 
 class BatchOperationResponse(BaseModel):
@@ -340,3 +436,33 @@ class CalendarEventResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class ApiUsage(Base):
+    """API usage tracking model"""
+    __tablename__ = "api_usage"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(255), nullable=False)
+    service = Column(String(50), nullable=False)  # 'groq', 'chatgpt', 'stability', 'piapi'
+    operation = Column(String(50), nullable=False)  # 'caption', 'image', 'batch_caption'
+    tokens_used = Column(Integer, default=0)
+    credits_used = Column(Integer, default=0)
+    cost_usd = Column(String(20), default="0.0")  # Store as string to avoid precision issues
+    request_data = Column(JSON)
+    response_data = Column(JSON)
+    created_at = Column(DateTime, default=func.now())
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'service': self.service,
+            'operation': self.operation,
+            'tokens_used': self.tokens_used,
+            'credits_used': self.credits_used,
+            'cost_usd': self.cost_usd,
+            'request_data': self.request_data,
+            'response_data': self.response_data,
+            'created_at': self.created_at,
+        }

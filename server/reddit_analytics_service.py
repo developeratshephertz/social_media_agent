@@ -83,6 +83,31 @@ class RedditAnalyticsService:
         """Check if service is properly configured"""
         return bool(self.client_id and self.client_secret and self.access_token)
     
+    def get_user_subreddit_followers(self, username: str) -> int:
+        """Get follower count from user's profile subreddit (r/u_username)"""
+        try:
+            # Try to get user-subreddit subscriber count
+            url = f"https://www.reddit.com/r/u_{username}/about.json"
+            headers = {'User-Agent': self.user_agent}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'data' in data and 'subscribers' in data['data']:
+                    return data['data']['subscribers']
+            elif response.status_code == 404:
+                # User-subreddit doesn't exist or is private
+                logger.info(f"User-subreddit r/u_{username} not accessible")
+                return 0
+            else:
+                logger.warning(f"Failed to get user-subreddit data: {response.status_code}")
+                return 0
+                
+        except Exception as e:
+            logger.error(f"Error getting user-subreddit followers: {e}")
+            return 0
+
     def get_account_info(self) -> Dict[str, Any]:
         """Get your Reddit account information"""
         if not self.is_configured():
@@ -100,14 +125,22 @@ class RedditAnalyticsService:
             
             if response.status_code == 200:
                 data = response.json()
+                username = data.get('name')
+                
+                # Get follower count from user-subreddit
+                followers_count = 0
+                if username:
+                    followers_count = self.get_user_subreddit_followers(username)
+                
                 return {
                     "success": True,
                     "account": {
-                        "username": data.get('name'),
+                        "username": username,
                         "user_id": data.get('id'),
                         "total_karma": data.get('total_karma', 0),
                         "link_karma": data.get('link_karma', 0),
                         "comment_karma": data.get('comment_karma', 0),
+                        "followers_count": followers_count,  # Real Reddit followers
                         "account_created": data.get('created_utc'),
                         "is_gold": data.get('is_gold', False),
                         "is_mod": data.get('is_mod', False),

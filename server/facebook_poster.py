@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+from image_path_utils import convert_url_to_local_path
 
 # Load environment variables
 load_dotenv()
@@ -24,7 +25,7 @@ class FacebookPoster:
         """Initialize with Facebook credentials from environment"""
         self.access_token = os.getenv("FACEBOOK_ACCESS_TOKEN")
         self.page_id = os.getenv("FACEBOOK_PAGE_ID")
-        self.graph_api_base = "https://graph.facebook.com/v18.0"
+        self.graph_api_base = "https://graph.facebook.com/v21.0"
         
         if not self.access_token:
             logger.warning("FACEBOOK_ACCESS_TOKEN not found in environment")
@@ -53,13 +54,11 @@ class FacebookPoster:
             }
         
         try:
-            # Construct the full image path
-            if image_path.startswith("/public/"):
-                # Remove leading slash and construct actual file path
-                actual_path = image_path[1:]  # Remove leading /
-            elif image_path.startswith("public/"):
-                actual_path = image_path
-            else:
+            # Convert image path to local file path using centralized utility
+            actual_path = convert_url_to_local_path(image_path)
+            
+            # If conversion failed or returned None, use fallback
+            if not actual_path:
                 actual_path = f"public/{image_path}"
             
             # Check if image file exists

@@ -4,9 +4,22 @@
 -- Enable UUID extension for generating unique IDs
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Create users table for authentication
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    google_id VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    picture_url VARCHAR(500),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    is_active BOOLEAN DEFAULT TRUE
+);
+
 -- Create campaigns table to group related posts
 CREATE TABLE campaigns (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -17,6 +30,7 @@ CREATE TABLE campaigns (
 -- Create batch_operations table first (before posts table that references it)
 CREATE TABLE batch_operations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     description TEXT NOT NULL,
     num_posts INTEGER NOT NULL,
     days_duration INTEGER NOT NULL,
@@ -32,8 +46,10 @@ CREATE TABLE batch_operations (
 -- Create posts table to store individual social media posts
 CREATE TABLE posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
     batch_id UUID REFERENCES batch_operations(id) ON DELETE SET NULL,
+    campaign_name TEXT, -- Campaign name for display purposes
     original_description TEXT NOT NULL,
     caption TEXT,
     image_path VARCHAR(500),
@@ -101,6 +117,7 @@ CREATE TABLE posting_schedules (
 -- Create calendar_events table for calendar integration
 CREATE TABLE calendar_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     post_id UUID REFERENCES posts(id) ON DELETE CASCADE, -- proper foreign key to posts table
     title VARCHAR(500) NOT NULL,
     description TEXT,
@@ -122,6 +139,10 @@ CREATE TABLE calendar_events (
 );
 
 -- Create indexes for better query performance
+CREATE INDEX idx_users_google_id ON users(google_id);
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_campaigns_user_id ON campaigns(user_id);
+CREATE INDEX idx_posts_user_id ON posts(user_id);
 CREATE INDEX idx_posts_campaign_id ON posts(campaign_id);
 CREATE INDEX idx_posts_batch_id ON posts(batch_id);
 CREATE INDEX idx_posts_scheduled_at ON posts(scheduled_at);
@@ -129,6 +150,8 @@ CREATE INDEX idx_posts_status ON posts(status);
 CREATE INDEX idx_posts_platforms ON posts USING GIN (platforms);
 CREATE INDEX idx_posts_subreddit ON posts(subreddit);
 CREATE INDEX idx_posts_created_at ON posts(created_at);
+CREATE INDEX idx_batch_operations_user_id ON batch_operations(user_id);
+CREATE INDEX idx_calendar_events_user_id ON calendar_events(user_id);
 
 CREATE INDEX idx_images_post_id ON images(post_id);
 CREATE INDEX idx_captions_post_id ON captions(post_id);
@@ -153,6 +176,9 @@ END;
 $$ LANGUAGE 'plpgsql';
 
 -- Create triggers to automatically update updated_at columns
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_campaigns_updated_at BEFORE UPDATE ON campaigns
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

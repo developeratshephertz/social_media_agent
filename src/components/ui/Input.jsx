@@ -1,33 +1,22 @@
 import { useId } from "react";
 import clsx from "clsx";
+import React from 'react';
 
-function Input({ label, type = "text", error, className, ...props }) {
-  const id = useId();
+export default function Input({ id, label, description, error, className = '', ...props }) {
+  const inputId = id || `input_${Math.random().toString(36).slice(2, 9)}`;
   return (
-    <div className="w-full">
-      {label && (
-        <label
-          htmlFor={id}
-          className="block text-sm font-medium text-gray-700 mb-1"
-        >
-          {label}
-        </label>
-      )}
+    <div className={`flex flex-col space-y-1 ${className}`}>
+      {label && <label htmlFor={inputId} className="text-sm font-medium">{label}</label>}
       <input
-        id={id}
-        type={type}
-        className={clsx(
-          "w-full rounded-md border border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-sm",
-          "px-3 py-2",
-          error && "border-red-500 focus:border-red-500 focus:ring-red-500",
-          className
-        )}
+        id={inputId}
         aria-invalid={!!error}
+        aria-describedby={description || error ? `${inputId}-desc` : undefined}
+        className={`px-3 py-2 border rounded-md text-sm bg-[var(--surface)] border-[var(--border)] focus-visible:shadow-[var(--ring)]`}
         {...props}
       />
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {description && !error && <div id={`${inputId}-desc`} className="text-xs text-[var(--text-muted)]">{description}</div>}
+      {error && <div id={`${inputId}-desc`} className="text-xs text-[var(--danger)]">{error}</div>}
     </div>
   );
 }
 
-export default Input;

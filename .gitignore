@@ -35,7 +35,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -58,12 +57,22 @@ venv.bak/
 *.sqlite
 *.sqlite3
 
-# Generated content
+# Generated content and uploads
+server/public/
+server/static/
+uploads/
+generated_images/
+user_uploads/
+
+# Generated AI content
 server/public/generated_*
 server/public/placeholder_*
 server/public/chatgpt_*
 server/public/nanobanana_*
 server/public/stability_*
+server/public/piapi_*
+server/public/custom_*
+server/public/idea_generator/
 
 # Docker
 .dockerignore
@@ -110,3 +119,15 @@ coverage.xml
 # Social media specific
 reddit_scheduled_posts.json
 *.json.bak
+
+# Additional cache and temporary files
+.cache/
+temp/
+tmp/
+debug/
+error.log
+access.log
+backup/
+credentials/
+keys/
+database/

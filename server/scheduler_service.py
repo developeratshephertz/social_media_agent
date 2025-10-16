@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 from database_service import db_service
 from facebook_poster import post_to_facebook, verify_facebook_setup
+from image_path_utils import convert_image_path_for_facebook, convert_image_path_for_twitter, convert_image_path_for_reddit
 
 logger = logging.getLogger(__name__)
 
@@ -105,12 +106,15 @@ class SchedulerService:
                 logger.info(f"Publishing to {platform}...")
                 
                 try:
-                    if platform in ["facebook", "instagram"]:
+                    if platform == "facebook":
                         # Post to Facebook using the new adapter
                         logger.info(f"Attempting to post to Facebook for post {post_id}")
                         
+                        # Convert image path to local file path for Facebook
+                        local_image_path = convert_image_path_for_facebook(image_path)
+                        
                         # Use the Facebook poster to publish
-                        result = post_to_facebook(caption=caption, image_path=image_path)
+                        result = post_to_facebook(caption=caption, image_path=local_image_path)
                         
                         if result["success"]:
                             platform_results[platform] = {
@@ -151,17 +155,7 @@ class SchedulerService:
                         title = caption[:100] if caption else "Social Media Post"
                         
                         # Convert image path to local file path for Reddit
-                        local_image_path = None
-                        if image_path:
-                            # Convert URL path to local file path
-                            if image_path.startswith("/public/"):
-                                local_image_path = image_path[1:]  # Remove leading slash
-                            elif image_path.startswith("public/"):
-                                local_image_path = image_path
-                            elif image_path.startswith("http://localhost:8000/public/"):
-                                local_image_path = image_path.replace("http://localhost:8000/", "")
-                            else:
-                                local_image_path = image_path
+                        local_image_path = convert_image_path_for_reddit(image_path)
                         
                         result = reddit_service.post_to_reddit(
                             title=title,
@@ -206,17 +200,7 @@ class SchedulerService:
                             continue
                         
                         # Post to Twitter - convert image path to local file path
-                        local_image_path = None
-                        if image_path:
-                            # Convert URL path to local file path
-                            if image_path.startswith("/public/"):
-                                local_image_path = image_path[1:]  # Remove leading slash
-                            elif image_path.startswith("public/"):
-                                local_image_path = image_path
-                            elif image_path.startswith("http://localhost:8000/public/"):
-                                local_image_path = image_path.replace("http://localhost:8000/", "")
-                            else:
-                                local_image_path = image_path
+                        local_image_path = convert_image_path_for_twitter(image_path)
                         
                         result = twitter_service.post_to_twitter(
                             content=caption,
@@ -240,6 +224,49 @@ class SchedulerService:
                             }
                             all_successful = False
                             logger.error(f"❌ Failed to publish post {post_id} to Twitter: {error_msg}")
+                    
+                    elif platform == "instagram":
+                        # Post to Instagram using the Instagram service
+                        logger.info(f"Attempting to post to Instagram for post {post_id}")
+                        
+                        from instagram_service import InstagramService
+                        instagram_service = InstagramService()
+                        
+                        if not instagram_service.is_configured():
+                            error_msg = "Instagram service not configured"
+                            platform_results[platform] = {
+                                "success": False,
+                                "error": error_msg
+                            }
+                            all_successful = False
+                            logger.error(f"❌ Failed to publish post {post_id} to {platform}: {error_msg}")
+                            continue
+                        
+                        # Post to Instagram - convert image path to local file path
+                        local_image_path = convert_image_path_for_facebook(image_path)  # Use same conversion as Facebook
+                        
+                        result = instagram_service.post_to_instagram(
+                            caption=caption,
+                            image_path=local_image_path
+                        )
+                        
+                        if result.get("success", False):
+                            platform_results[platform] = {
+                                "success": True,
+                                "post_id": result.get('post_id'),
+                                "url": result.get('url')
+                            }
+                            logger.info(f"✅ Successfully published post {post_id} to Instagram!")
+                            logger.info(f"Instagram Post ID: {result.get('post_id')}")
+                            logger.info(f"Post URL: {result.get('url')}")
+                        else:
+                            error_msg = result.get("error", "Unknown error")
+                            platform_results[platform] = {
+                                "success": False,
+                                "error": error_msg
+                            }
+                            all_successful = False
+                            logger.error(f"❌ Failed to publish post {post_id} to Instagram: {error_msg}")
                     
                     else:
                         logger.warning(f"Unsupported platform: {platform}")
@@ -289,6 +316,29 @@ class SchedulerService:
         
         return image_path
     
+    async def _update_calendar_events_for_post(self, post_id: str, status: str):
+        """Update calendar events for a post to reflect the new status"""
+        try:
+            from database import db_manager
+            
+            # Update calendar events for this post
+            calendar_update_query = """
+                UPDATE calendar_events 
+                SET status = :status, 
+                    updated_at = NOW()
+                WHERE post_id = :post_id
+            """
+            
+            await db_manager.execute_query(calendar_update_query, {
+                "post_id": str(post_id),
+                "status": status
+            })
+            
+            logger.info(f"Updated calendar events for post {post_id} to status: {status}")
+            
+        except Exception as e:
+            logger.error(f"Error updating calendar events for post {post_id}: {e}")
+
     async def _mark_post_published_multi_platform(self, post_id: str, platform_results: Dict[str, Any]):
         """Mark a post as successfully published to all platforms"""
         try:
@@ -334,6 +384,10 @@ class SchedulerService:
             await db_manager.execute_query(metrics_query, {"post_id": post_id})
             
             successful_platforms = list(platform_results.keys())
+            
+            # Update calendar events for this post
+            await self._update_calendar_events_for_post(post_id, "published")
+            
             logger.info(f"Marked post {post_id} as published to all platforms: {successful_platforms}")
             
         except Exception as e:
@@ -388,6 +442,9 @@ class SchedulerService:
             
             await db_manager.execute_query(metrics_query, {"post_id": post_id})
             
+            # Update calendar events for this post
+            await self._update_calendar_events_for_post(post_id, "partially_published")
+            
             logger.info(f"Marked post {post_id} as partially published - Success: {successful_platforms}, Failed: {failed_platforms}")
             
         except Exception as e:
@@ -430,6 +487,9 @@ class SchedulerService:
             """
             
             await db_manager.execute_query(metrics_query, {"post_id": post_id})
+            
+            # Update calendar events for this post
+            await self._update_calendar_events_for_post(post_id, "failed")
             
             logger.info(f"Marked post {post_id} as failed: {error_message}")
             

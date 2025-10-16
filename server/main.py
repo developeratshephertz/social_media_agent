@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -17,9 +17,9 @@ from contextlib import asynccontextmanager
 from google_complete import router as google_router
 
 # Database imports
-from database import startup_db, shutdown_db, get_database
+from database import startup_db, shutdown_db, get_database, get_sync_db
 from database_service import db_service
-from models import PostResponse as PostResponseModel, CalendarEventResponse
+from models import PostResponse as PostResponseModel, CalendarEventResponse, ApiUsage
 from calendar_service import CalendarService
 
 # Scheduler imports
@@ -63,17 +63,63 @@ app.add_middleware(
 )
 
 # Mount static files directory
-app.mount("/public", StaticFiles(directory="public"), name="public")
 app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 # Mount frontend static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Custom endpoint to handle files with special characters in public directory
+@app.get("/public/{filename:path}")
+async def serve_public_file(filename: str):
+    """Serve files from public directory, handling URL-encoded filenames"""
+    import urllib.parse
+    import os
+    
+    print(f"🔍 Serving public file - Original filename: {filename}")
+    
+    # Decode the filename to handle special characters
+    decoded_filename = urllib.parse.unquote(filename)
+    print(f"🔍 Decoded filename: {decoded_filename}")
+    
+    # Construct the file path
+    file_path = os.path.join("public", decoded_filename)
+    print(f"🔍 Looking for file at: {file_path}")
+    
+    # Check if file exists
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        print(f"✅ Found file: {file_path}")
+        return FileResponse(file_path)
+    else:
+        # If decoded filename doesn't exist, try the original filename
+        original_file_path = os.path.join("public", filename)
+        print(f"🔍 Trying original filename: {original_file_path}")
+        if os.path.exists(original_file_path) and os.path.isfile(original_file_path):
+            print(f"✅ Found file with original name: {original_file_path}")
+            return FileResponse(original_file_path)
+        else:
+            print(f"❌ File not found: {file_path} or {original_file_path}")
+            raise HTTPException(status_code=404, detail="File not found")
+
 # Serve frontend index.html for all non-API routes
-from fastapi.responses import FileResponse
 
 
 # Include Google integration router
 app.include_router(google_router)
+
+# Include social media routes
+from social_media_routes import router as social_media_router
+app.include_router(social_media_router)
+
+# Include authentication routes
+from auth_routes import router as auth_router
+app.include_router(auth_router)
+
+# Include idea generator routes
+from idea_generator_routes import router as idea_generator_router
+app.include_router(idea_generator_router)
+
+# Import auth dependency after router is included
+from auth_routes import get_current_user_dependency
+from auth_service import auth_service
 
 # Lifespan events are now handled in the lifespan context manager above
 
@@ -81,7 +127,39 @@ app.include_router(google_router)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")  # For image generation
 CHATGPT_API_KEY = os.getenv("CHATGPT_API")  # For caption and image generation
-NANO_BANANA_API_KEY = os.getenv("NANO_BANANA_API_KEY")  # For image generation
+# PiAPI for Gemini image generation (supports both new and legacy env var names)
+PIAPI_API_KEY = os.getenv("PIAPI_API_KEY") or os.getenv("NANO_BANANA_API_KEY")
+
+
+def log_api_usage(user_id: str, service: str, operation: str, tokens_used: int = 0, credits_used: int = 0, response_data: dict = None):
+    """Log API usage to database"""
+    try:
+        print(f"🔍 Logging API usage - user_id: {user_id}, service: {service}, operation: {operation}, tokens: {tokens_used}, credits: {credits_used}")
+        # Create a new session directly
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            usage = ApiUsage(
+                user_id=user_id,
+                service=service,
+                operation=operation,
+                tokens_used=tokens_used,
+                credits_used=credits_used,
+                response_data=response_data
+            )
+            db.add(usage)
+            db.commit()
+            print(f"✅ Logged API usage: {service} - {tokens_used} tokens, {credits_used} credits")
+        except Exception as db_error:
+            print(f"❌ Database error in log_api_usage: {db_error}")
+            db.rollback()
+            raise db_error
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"❌ Failed to log API usage: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 class PostRequest(BaseModel):
@@ -107,6 +185,7 @@ class BatchRequest(BaseModel):
     image_provider: Optional[str] = "stability"  # stability, chatgpt, nano_banana
     platforms: Optional[List[str]] = ["instagram"]  # Array of platforms: instagram, facebook, twitter, reddit
     subreddit: Optional[str] = None  # For Reddit posts
+    campaign_name: Optional[str] = None  # Campaign name for the batch
 
 
 class BatchItem(BaseModel):
@@ -123,7 +202,7 @@ class BatchResponse(BaseModel):
     batch_id: Optional[str] = None
 
 
-def generate_caption_with_groq(description: str) -> str:
+def generate_caption_with_groq(description: str, user_id: str = None) -> str:
     """Generate Instagram caption using Groq API"""
     try:
         if not GROQ_API_KEY:
@@ -159,7 +238,15 @@ def generate_caption_with_groq(description: str) -> str:
 
         if response.status_code == 200:
             result = response.json()
+            print(f"🔍 Groq API Response: {result}")
             caption = result["choices"][0]["message"]["content"].strip()
+            
+            # Log usage if user_id is provided
+            if user_id:
+                usage_info = result.get("usage", {})
+                tokens_used = usage_info.get("total_tokens", 0)
+                log_api_usage(user_id, "groq", "caption", tokens_used, 0, result)
+            
             return caption
         else:
             raise Exception(f"Groq API error: {response.status_code}")
@@ -173,7 +260,7 @@ def generate_caption_with_groq(description: str) -> str:
         )
 
 
-def generate_caption_with_chatgpt(description: str) -> str:
+def generate_caption_with_chatgpt(description: str, user_id: str = None) -> str:
     """Generate Instagram caption using ChatGPT API"""
     try:
         if not CHATGPT_API_KEY:
@@ -210,8 +297,16 @@ def generate_caption_with_chatgpt(description: str) -> str:
 
         if response.status_code == 200:
             result = response.json()
+            print(f"🔍 ChatGPT API Response: {result}")
             caption = result["choices"][0]["message"]["content"].strip()
             print(f"✅ ChatGPT caption generated successfully")
+            
+            # Log usage if user_id is provided
+            if user_id:
+                usage_info = result.get("usage", {})
+                tokens_used = usage_info.get("total_tokens", 0)
+                log_api_usage(user_id, "chatgpt", "caption", tokens_used, 0, result)
+            
             return caption
         elif response.status_code == 429:
             print("⚠️ ChatGPT API rate limit exceeded, using fallback caption")
@@ -233,15 +328,15 @@ def generate_caption_with_chatgpt(description: str) -> str:
         return random.choice(fallback_captions)
 
 
-def generate_caption(description: str, provider: str = "groq") -> str:
+def generate_caption(description: str, provider: str = "groq", user_id: str = None) -> str:
     """Generate caption using specified provider"""
     if provider == "groq":
-        return generate_caption_with_groq(description)
+        return generate_caption_with_groq(description, user_id)
     elif provider == "chatgpt":
-        return generate_caption_with_chatgpt(description)
+        return generate_caption_with_chatgpt(description, user_id)
     else:
         # Default to Groq
-        return generate_caption_with_groq(description)
+        return generate_caption_with_groq(description, user_id)
 
 
 def create_placeholder_image(description: str) -> Optional[str]:
@@ -484,81 +579,112 @@ def generate_image_with_chatgpt(description: str) -> Optional[str]:
         return create_placeholder_image(description)
 
 
-def generate_image_with_nano_banana(description: str) -> Optional[str]:
-    """Generate image using Nano Banana (Google Gemini 2.5 Flash Image Preview) API.
+def generate_image_with_nano_banana(description: str, user_id: str = None) -> Optional[str]:
+    """Generate image via PiAPI (Gemini-2.5-flash-image) using unified task API.
     Falls back to placeholder image if service is unavailable.
     """
     try:
-        if not NANO_BANANA_API_KEY:
-            print("Nano Banana (Google Gemini) API key not found, creating placeholder image...")
+        if not PIAPI_API_KEY:
+            print("PiAPI key not found (set PIAPI_API_KEY or NANO_BANANA_API_KEY), creating placeholder image...")
             return create_placeholder_image(description)
 
-        import google.generativeai as genai
-        
-        # Configure Gemini API
-        genai.configure(api_key=NANO_BANANA_API_KEY)
-        
-        # Initialize Nano Banana model (Gemini 2.5 Flash Image Preview)
-        model = genai.GenerativeModel('gemini-2.5-flash-image-preview')
-        
-        # Enhanced prompt for better Instagram-quality images
-        enhanced_prompt = (
-            f"Generate a high-quality, professional image of {description}. "
-            "Make it perfect for Instagram: visually appealing, well-composed, good lighting, "
-            "vibrant colors, sharp focus. The image should be engaging and social media ready."
-        )
-        
-        # Generate the image
-        print(f"Generating image with Nano Banana for: {description[:50]}...")
-        response = model.generate_content([enhanced_prompt])
-        
-        # Check if response contains image data
-        if not response.parts:
-            raise Exception("No response parts received from Nano Banana")
-        
-        # Extract image data from response
-        image_part = None
-        for part in response.parts:
-            if hasattr(part, 'inline_data') and part.inline_data:
-                if part.inline_data.mime_type.startswith('image/'):
-                    image_part = part
-                    break
-        
-        if not image_part:
-            raise Exception("No image data found in Nano Banana response")
-        
-        # Decode and save the image
-        image_data = base64.b64decode(image_part.inline_data.data)
+        # Build request per PiAPI docs: POST https://api.piapi.ai/api/v1/task
+        url = "https://api.piapi.ai/api/v1/task"
+        headers = {
+            "X-API-Key": PIAPI_API_KEY,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "gemini",
+            "task_type": "gemini-2.5-flash-image",
+            "input": {
+                "prompt": description,
+                "num_images": 1,
+                "output_format": "png",
+            }
+        }
+
+        create_resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        if create_resp.status_code != 200:
+            raise Exception(f"PiAPI create task error: {create_resp.status_code} {create_resp.text[:200]}")
+        create_result = create_resp.json()
+        print(f"🔍 PiAPI Create Task Response: {create_result}")
+        data = create_result.get("data") or {}
+        task_id = data.get("task_id")
+        if not task_id:
+            raise Exception("PiAPI create task did not return task_id")
+
+        # Poll for completion
+        get_url = f"https://api.piapi.ai/api/v1/task/{task_id}"
+        status = None
+        output = None
+        start = time.time()
+        while time.time() - start < 90:  # up to 90s
+            get_resp = requests.get(get_url, headers=headers, timeout=15)
+            if get_resp.status_code != 200:
+                time.sleep(2)
+                continue
+            g = get_resp.json().get("data") or {}
+            status = g.get("status")
+            if status == "completed":
+                output = g.get("output") or {}
+                print(f"🔍 PiAPI Task Completion Response: {get_resp.json()}")
+                break
+            if status in {"failed"}:
+                err = (g.get("error") or {}).get("message") or "unknown error"
+                raise Exception(f"PiAPI task failed: {err}")
+            time.sleep(2)
+
+        if status != "completed" or not output:
+            raise Exception("PiAPI task did not complete in time")
+
+        # Extract image url(s)
+        image_url = output.get("image_url")
+        if not image_url:
+            urls = output.get("image_urls") or []
+            image_url = urls[0] if urls else None
+        if not image_url:
+            raise Exception("PiAPI completed but no image URL in output")
+
+        # Download and save image locally under public/
+        img_resp = requests.get(image_url, timeout=60)
+        if img_resp.status_code != 200:
+            raise Exception(f"Failed to download image: {img_resp.status_code}")
         filename = (
-            f"nanobanana_{hashlib.md5(description.encode()).hexdigest()[:8]}_"
+            f"piapi_{hashlib.md5(description.encode()).hexdigest()[:8]}_"
             f"{int(datetime.now().timestamp())}.png"
         )
         filepath = f"public/{filename}"
         os.makedirs("public", exist_ok=True)
-        
         with open(filepath, "wb") as f:
-            f.write(image_data)
+            f.write(img_resp.content)
+
+        # Extract usage/credit information if available
+        meta_info = g.get("meta", {})
+        usage_info = meta_info.get("usage", {})
+        credits_used = usage_info.get("consume", 0)  # PiAPI uses 'consume' field
         
-        print(f"✅ Nano Banana image generated successfully: {filepath}")
+        # Log usage if user_id is provided
+        if user_id:
+            log_api_usage(user_id, "piapi", "image", 0, credits_used, get_resp.json())
+        
+        print(f"✅ PiAPI image generated successfully: {filepath} - Credits used: {credits_used}")
         return f"/public/{filename}"
 
-    except ImportError:
-        print("Google Generative AI library not installed. Install with: pip install google-generativeai")
-        return create_placeholder_image(description)
     except Exception as e:
-        print(f"Nano Banana image generation error: {e}")
+        print(f"PiAPI image generation error: {e}")
         print("Creating placeholder image as fallback...")
         return create_placeholder_image(description)
 
 
-def generate_image(description: str, provider: str = "stability") -> Optional[str]:
+def generate_image(description: str, provider: str = "stability", user_id: str = None) -> Optional[str]:
     """Generate image using specified provider"""
     if provider == "stability":
         return generate_image_with_stability(description)
     elif provider == "chatgpt":
         return generate_image_with_chatgpt(description)
     elif provider == "nano_banana":
-        return generate_image_with_nano_banana(description)
+        return generate_image_with_nano_banana(description, user_id)
     else:
         # Default to Stability
         return generate_image_with_stability(description)
@@ -577,13 +703,76 @@ async def health():
             "groq_configured": bool(GROQ_API_KEY),
             "chatgpt_configured": bool(CHATGPT_API_KEY),
             "stability_configured": bool(STABILITY_API_KEY),
-            "nano_banana_configured": bool(NANO_BANANA_API_KEY),
+            "nano_banana_configured": bool(PIAPI_API_KEY),
         },
     }
 
 
+@app.get("/api/usage-stats")
+async def get_usage_stats(current_user = Depends(get_current_user_dependency)):
+    """Get user's API usage statistics"""
+    try:
+        user_id = str(current_user.id) if current_user and hasattr(current_user, 'id') else None
+        print(f"🔍 Usage stats - user_id: {user_id}, current_user type: {type(current_user)}")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User not authenticated")
+        
+        # Create a new session directly
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            # Get total usage by service
+            from sqlalchemy import func
+            print(f"🔍 Querying usage stats for user_id: {user_id}")
+            usage_stats = db.query(
+                ApiUsage.service,
+                func.sum(ApiUsage.tokens_used).label('total_tokens'),
+                func.sum(ApiUsage.credits_used).label('total_credits'),
+                func.count(ApiUsage.id).label('total_requests')
+            ).filter(
+                ApiUsage.user_id == user_id
+            ).group_by(ApiUsage.service).all()
+            print(f"🔍 Query result: {usage_stats}")
+        finally:
+            db.close()
+        
+        # Format the response
+        stats = {}
+        for stat in usage_stats:
+            stats[stat.service] = {
+                "tokens_used": stat.total_tokens or 0,
+                "credits_used": stat.total_credits or 0,
+                "requests_made": stat.total_requests or 0
+            }
+        
+        print(f"🔍 Usage stats response: {stats}")
+        return {"success": True, "usage": stats}
+        
+    except Exception as e:
+        print(f"Error getting usage stats: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/test-usage-log")
+async def test_usage_log(current_user = Depends(get_current_user_dependency)):
+    """Test endpoint to manually log usage for testing"""
+    try:
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User not authenticated")
+        
+        # Log some test usage
+        log_api_usage(user_id, "groq", "caption", 120, 0, {"test": "data"})
+        log_api_usage(user_id, "piapi", "image", 0, 300000, {"test": "data"})
+        
+        return {"success": True, "message": "Test usage logged successfully"}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/generate-post", response_model=PostResponse)
-async def generate_post(request: PostRequest):
+async def generate_post(request: PostRequest, current_user = Depends(get_current_user_dependency)):
     """Generate Instagram post with image and caption"""
     try:
         if not request.description or len(request.description.strip()) < 3:
@@ -598,7 +787,7 @@ async def generate_post(request: PostRequest):
         caption = generate_caption(description, request.caption_provider)
 
         # Generate image using selected provider
-        image_path = generate_image(description, request.image_provider)
+        image_path = generate_image(description, request.image_provider, str(current_user.id))
 
         if not image_path:
             return PostResponse(
@@ -617,7 +806,8 @@ async def generate_post(request: PostRequest):
                 image_path=image_path,
                 campaign_id=default_campaign_id,
                 platforms=request.platforms,
-                subreddit=request.subreddit
+                subreddit=request.subreddit,
+                user_id=str(current_user.id)
             )
             
             # Save image information
@@ -675,10 +865,161 @@ async def generate_caption_endpoint(request: PostRequest):
         return PostResponse(success=False, error=f"Error generating caption: {str(e)}")
 
 
+@app.post("/generate-captions-batch")
+async def generate_captions_batch(request: BatchRequest, authorization: Optional[str] = Header(None)):
+    """Generate multiple captions only (for advanced mode)"""
+    try:
+        print(f"📝 Batch captions request: description='{request.description}', num_posts={request.num_posts}, provider='{request.caption_provider}'")
+        description = (request.description or "").strip()
+        if len(description) < 3:
+            raise HTTPException(
+                status_code=400, detail="Description must be at least 3 characters long"
+            )
+        if request.num_posts <= 0:
+            raise HTTPException(
+                status_code=400, detail="num_posts must be a positive integer"
+            )
+        if request.num_posts > 20:
+            raise HTTPException(
+                status_code=400, detail="num_posts is too large; max 20 per batch"
+            )
+
+        captions = []
+        for i in range(request.num_posts):
+            try:
+                # Generate varied description for each caption
+                if request.num_posts > 1:
+                    varied_description = f"{description} - variation {i + 1}"
+                else:
+                    varied_description = description
+                
+                # Try to get user_id from authorization header if available
+                user_id = None
+                if authorization and authorization.startswith('Bearer '):
+                    try:
+                        token = authorization.replace('Bearer ', '')
+                        current_user = await auth_service.get_current_user(token)
+                        user_id = str(current_user.id) if current_user and hasattr(current_user, 'id') else None
+                        print(f"🔍 Caption generation - user_id: {user_id}")
+                    except Exception as e:
+                        print(f"Failed to get user from token: {e}")
+                        user_id = None
+                caption = generate_caption(varied_description, request.caption_provider, user_id)
+                captions.append(caption)
+                
+            except Exception as e:
+                print(f"Error generating caption {i + 1}: {e}")
+                captions.append(f"Error generating caption: {str(e)}")
+        
+        response = {"success": True, "captions": captions}
+        print(f"📝 Batch captions response: {response}")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_response = {"success": False, "error": f"Error generating captions: {str(e)}"}
+        print(f"❌ Batch captions error: {error_response}")
+        return error_response
+
+@app.post("/generate-image-only")
+async def generate_image_only(request: dict, current_user = Depends(get_current_user_dependency)):
+    """Generate image only without creating a post (for advanced mode)"""
+    try:
+        description = request.get("description", "").strip()
+        image_provider = request.get("image_provider", "stability")
+        
+        if len(description) < 3:
+            raise HTTPException(
+                status_code=400, detail="Description must be at least 3 characters long"
+            )
+        
+        # Generate image using selected provider with user_id for logging
+        image_path = generate_image(description, image_provider, str(current_user.id))
+        
+        if not image_path:
+            raise HTTPException(
+                status_code=500, detail="Failed to generate image. Please try again."
+            )
+        
+        return {"success": True, "image_path": image_path}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": f"Error generating image: {str(e)}"}
+
+@app.post("/upload-custom-image")
+async def upload_custom_image(request: dict):
+    """Upload and save a custom image from data URL"""
+    try:
+        data_url = request.get("data_url", "").strip()
+        description = request.get("description", "custom_image").strip()
+        
+        if not data_url or not data_url.startswith('data:image/'):
+            raise HTTPException(
+                status_code=400, detail="Invalid data URL. Must be a valid image data URL."
+            )
+        
+        # Parse data URL
+        try:
+            header, data = data_url.split(',', 1)
+            # Extract image format from header (e.g., "data:image/jpeg;base64")
+            format_part = header.split(';')[0].split('/')[-1]
+            if format_part not in ['jpeg', 'jpg', 'png', 'gif', 'webp']:
+                format_part = 'png'  # Default to PNG
+            
+            # Decode base64 data
+            image_data = base64.b64decode(data)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid data URL format: {str(e)}"
+            )
+        
+        # Create filename with timestamp and hash
+        timestamp = int(time.time())
+        hash_suffix = hashlib.md5(image_data[:1000]).hexdigest()[:8]  # Use first 1KB for hash
+        
+        # Sanitize description for filename (remove special characters)
+        import re
+        sanitized_description = re.sub(r'[^\w\s-]', '', description).strip()
+        sanitized_description = re.sub(r'[-\s]+', '_', sanitized_description)
+        if not sanitized_description:
+            sanitized_description = "custom_image"
+        
+        filename = f"custom_{sanitized_description}_{timestamp}_{hash_suffix}.{format_part}"
+        
+        # Ensure public directory exists
+        public_dir = "public"
+        if not os.path.exists(public_dir):
+            os.makedirs(public_dir)
+        
+        # Save image file
+        file_path = os.path.join(public_dir, filename)
+        with open(file_path, 'wb') as f:
+            f.write(image_data)
+        
+        # Return the relative path for the frontend
+        relative_path = f"/public/{filename}"
+        
+        print(f"Custom image uploaded: {file_path}")
+        return {
+            "success": True, 
+            "image_path": relative_path,
+            "filename": filename
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error uploading custom image: {e}")
+        return {"success": False, "error": f"Error uploading image: {str(e)}"}
+
 def _compute_schedule_dates(num_posts: int, days: int) -> List[str]:
     """Distribute posts across the given days; allow multiple posts per day.
     
     Posts start from the next hour after current time.
+    No posts scheduled after 10 PM (22:00).
     Example: If created at 2:30 PM, first post at 3:00 PM.
     """
     if num_posts <= 0:
@@ -686,38 +1027,80 @@ def _compute_schedule_dates(num_posts: int, days: int) -> List[str]:
     if days <= 0:
         days = 1
 
-    # Posts per day (ceil)
-    per_day = (num_posts + days - 1) // days
+    # Define business hours (9 AM to 10 PM)
+    EARLIEST_HOUR = 9
+    LATEST_HOUR = 22  # 10 PM
+    BUSINESS_HOURS_PER_DAY = LATEST_HOUR - EARLIEST_HOUR  # 13 hours
 
-    # Start from next hour after current time
+    # Start from next hour after current time, but not earlier than 9 AM
     now = datetime.now()
-    start_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    
+    # If it's past 10 PM, start tomorrow at 9 AM
+    if next_hour.hour > LATEST_HOUR:
+        start_time = (next_hour + timedelta(days=1)).replace(hour=EARLIEST_HOUR)
+    # If it's before 9 AM, start at 9 AM today
+    elif next_hour.hour < EARLIEST_HOUR:
+        start_time = next_hour.replace(hour=EARLIEST_HOUR)
+    else:
+        start_time = next_hour
+
+    # Calculate optimal distribution
+    posts_per_day = (num_posts + days - 1) // days  # Ceiling division
+    
+    # If too many posts for business hours, spread across more days
+    if posts_per_day > BUSINESS_HOURS_PER_DAY:
+        # Recalculate days to accommodate all posts within business hours
+        days = (num_posts + BUSINESS_HOURS_PER_DAY - 1) // BUSINESS_HOURS_PER_DAY
+        posts_per_day = (num_posts + days - 1) // days
 
     results: List[str] = []
     for i in range(num_posts):
-        day_index = i // per_day
-        slot_index = i % per_day
+        day_index = i // posts_per_day
+        slot_index = i % posts_per_day
 
+        # Start at the base time for this day
         schedule_time = start_time + timedelta(days=day_index)
         
-        if per_day == 1:
-            # Single post per day, maintain the start time for each day
-            pass  # schedule_time is already set correctly
+        if posts_per_day == 1:
+            # Single post per day, use the start time for each day
+            # But ensure it's within business hours
+            if schedule_time.hour < EARLIEST_HOUR:
+                schedule_time = schedule_time.replace(hour=EARLIEST_HOUR)
+            elif schedule_time.hour > LATEST_HOUR:
+                schedule_time = schedule_time.replace(hour=LATEST_HOUR)
         else:
-            # Multiple posts per day, spread them out
-            hour_step = max(1, 12 // per_day)  # Spread over 12 hours
-            schedule_time += timedelta(hours=slot_index * hour_step)
+            # Multiple posts per day, distribute evenly within business hours
+            base_hour = max(schedule_time.hour, EARLIEST_HOUR)
+            hours_remaining_today = LATEST_HOUR - base_hour
             
-            # Don't schedule too late (before 10 PM)
-            if schedule_time.hour > 22:
-                schedule_time = schedule_time.replace(hour=22, minute=0)
+            # If not enough hours left today for all posts, spread across more days
+            if hours_remaining_today < posts_per_day - 1:
+                # Redistribute posts across more days to stay within business hours
+                # Move this post to the next day if needed
+                if slot_index > hours_remaining_today:
+                    extra_days = (slot_index - hours_remaining_today + BUSINESS_HOURS_PER_DAY - 1) // BUSINESS_HOURS_PER_DAY
+                    schedule_time = (schedule_time + timedelta(days=extra_days)).replace(hour=EARLIEST_HOUR)
+                    slot_index = slot_index % BUSINESS_HOURS_PER_DAY
+                    base_hour = EARLIEST_HOUR
+                    hours_remaining_today = BUSINESS_HOURS_PER_DAY
+            
+            # Calculate the target hour within business hours
+            if posts_per_day > 1 and hours_remaining_today > 0:
+                hour_spacing = max(1, hours_remaining_today // posts_per_day)
+                target_hour = base_hour + (slot_index * hour_spacing)
+                
+                # Ensure we absolutely don't exceed business hours
+                target_hour = min(target_hour, LATEST_HOUR)
+                
+                schedule_time = schedule_time.replace(hour=target_hour)
 
         results.append(schedule_time.isoformat())
     return results
 
 
 @app.post("/generate-batch", response_model=BatchResponse)
-async def generate_batch(request: BatchRequest):
+async def generate_batch(request: BatchRequest, current_user = Depends(get_current_user_dependency)):
     """Generate multiple posts and return caption, image path, and scheduled time for each."""
     import time
     request_id = int(time.time() * 1000) % 10000
@@ -747,7 +1130,7 @@ async def generate_batch(request: BatchRequest):
                 description=description,
                 num_posts=request.num_posts,
                 days_duration=request.days,
-                created_by="api_user"  # Could be enhanced with proper user management
+                created_by=str(current_user.id)
             )
             print(f"Created batch operation with ID: {batch_id}")
         except Exception as db_error:
@@ -794,7 +1177,7 @@ async def generate_batch(request: BatchRequest):
                     varied_description = description
                 
                 caption = generate_caption(varied_description, request.caption_provider)
-                image_path = generate_image(varied_description, request.image_provider)
+                image_path = generate_image(varied_description, request.image_provider, str(current_user.id))
                 
                 # Add small delay to ensure timestamp variation works
                 if request.num_posts > 1:
@@ -814,6 +1197,7 @@ async def generate_batch(request: BatchRequest):
                 try:
                     # Create post record as draft
                     post_id = await db_service.create_post(
+                        campaign_name=request.campaign_name or "",
                         original_description=varied_description,  # Use varied description
                         caption=caption,
                         image_path=image_path,
@@ -821,7 +1205,8 @@ async def generate_batch(request: BatchRequest):
                         campaign_id=default_campaign_id,
                         platforms=None,  # Platforms will be set when user selects them
                         status="draft",  # Explicitly set as draft
-                        batch_id=batch_id
+                        batch_id=batch_id,
+                        user_id=str(current_user.id)
                     )
                     
                     # Save image information
@@ -888,10 +1273,46 @@ async def generate_batch(request: BatchRequest):
         return BatchResponse(success=False, items=[], error=f"Error generating batch: {str(e)}")
 
 
+@app.post("/api/batch/create")
+async def create_batch_only(request: BatchRequest):
+    """Create a batch operation without generating posts (for advanced mode)"""
+    try:
+        description = (request.description or "").strip()
+        if len(description) < 3:
+            raise HTTPException(
+                status_code=400, detail="Description must be at least 3 characters long"
+            )
+        if request.days <= 0:
+            raise HTTPException(status_code=400, detail="Days must be a positive integer")
+        if request.num_posts <= 0:
+            raise HTTPException(
+                status_code=400, detail="num_posts must be a positive integer"
+            )
+        if request.num_posts > 20:
+            raise HTTPException(
+                status_code=400, detail="num_posts is too large; max 20 per batch"
+            )
+
+        # Create batch operation record only
+        batch_id = await db_service.create_batch_operation(
+            description=description,
+            num_posts=request.num_posts,
+            days_duration=request.days,
+            created_by="api_user"
+        )
+        
+        return {"success": True, "batch_id": batch_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": f"Error creating batch: {str(e)}"}
+
+
 # Database management endpoints
 @app.post("/api/posts")
-async def create_post(post_data: dict):
-    """Create a new post in database"""
+async def create_post(post_data: dict, current_user = Depends(get_current_user_dependency)):
+    """Create a new post in database and associate it with the current user"""
     try:
         # Get default campaign ID
         default_campaign_id = await db_service.get_default_campaign_id()
@@ -902,8 +1323,9 @@ async def create_post(post_data: dict):
             from datetime import datetime
             scheduled_at = datetime.fromisoformat(post_data['scheduled_at'].replace('Z', '+00:00'))
         
-        # Create post record
+        # Create post record with user_id so calendar queries work per-user
         post_id = await db_service.create_post(
+            campaign_name=post_data.get('campaign_name', ''),
             original_description=post_data.get('original_description', ''),
             caption=post_data.get('caption', ''),
             image_path=post_data.get('image_path'),
@@ -912,7 +1334,8 @@ async def create_post(post_data: dict):
             platforms=post_data.get('platforms'),
             subreddit=post_data.get('subreddit'),
             status=post_data.get('status', 'draft'),
-            batch_id=post_data.get('batch_id')
+            batch_id=post_data.get('batch_id'),
+            user_id=str(current_user.id)
         )
         
         return {"success": True, "post_id": post_id}
@@ -920,11 +1343,43 @@ async def create_post(post_data: dict):
         return {"success": False, "error": str(e)}
 
 @app.get("/api/posts")
-async def get_recent_posts(limit: int = 10):
+async def get_recent_posts(limit: int = 10, current_user = Depends(get_current_user_dependency)):
     """Get recent posts from database"""
     try:
-        posts = await db_service.get_recent_posts(limit=limit)
+        posts = await db_service.get_recent_posts(limit=limit, user_id=str(current_user.id))
         return {"success": True, "posts": posts}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.put("/api/posts/{post_id}/schedule")
+async def schedule_post(post_id: str, schedule_data: dict, current_user = Depends(get_current_user_dependency)):
+    """Schedule an existing post and create calendar event"""
+    try:
+        # Parse scheduled_at
+        scheduled_at = None
+        if schedule_data.get('scheduled_at'):
+            from datetime import datetime
+            scheduled_at = datetime.fromisoformat(schedule_data['scheduled_at'].replace('Z', '+00:00'))
+        
+        if not scheduled_at:
+            raise HTTPException(status_code=400, detail="scheduled_at is required")
+        
+# Update post schedule and create calendar event
+        success = await db_service.update_post_schedule(
+            post_id=post_id,
+            scheduled_at=scheduled_at,
+            status=schedule_data.get('status', 'scheduled'),
+            platforms=schedule_data.get('platforms'),
+            user_id=str(current_user.id)
+        )
+        
+        if success:
+            return {"success": True, "message": "Post scheduled successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Post not found or update failed")
+    
+    except HTTPException:
+        raise
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -961,6 +1416,14 @@ async def update_post(post_id: str, update_data: dict):
         if "platforms" in update_data:
             updates.append("platforms = :platforms")
             values["platforms"] = update_data["platforms"]
+            
+        if "image_path" in update_data:
+            updates.append("image_path = :image_path")
+            values["image_path"] = update_data["image_path"]
+            
+        if "image_url" in update_data:
+            updates.append("image_url = :image_url")
+            values["image_url"] = update_data["image_url"]
             
         if not updates:
             return {"success": True, "message": "No updates provided"}
@@ -1005,11 +1468,25 @@ async def delete_post(post_id: str):
         return {"success": False, "error": str(e)}
 
 
+@app.delete("/api/posts/clear-all")
+async def clear_all_posts():
+    """Clear all posts from the database (for testing purposes)"""
+    try:
+        success = await db_service.clear_all_posts()
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to clear all posts")
+        return {"success": True, "message": "All posts cleared successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/scheduled-posts")
-async def get_scheduled_posts():
+async def get_scheduled_posts(current_user = Depends(get_current_user_dependency)):
     """Get posts that are scheduled for posting"""
     try:
-        posts = await db_service.get_scheduled_posts()
+        posts = await db_service.get_scheduled_posts(user_id=str(current_user.id))
         return {"success": True, "scheduled_posts": posts}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -1044,8 +1521,39 @@ class ScheduleBatchRequest(BaseModel):
     days: int
 
 
+class GenerateScheduleRequest(BaseModel):
+    num_posts: int
+    days: int
+
+
+@app.post("/api/generate-schedule")
+async def generate_schedule_dates(request: GenerateScheduleRequest):
+    """Generate optimal schedule dates for posts without requiring a batch"""
+    try:
+        if request.num_posts <= 0:
+            raise HTTPException(status_code=400, detail="num_posts must be positive")
+        if request.days <= 0:
+            raise HTTPException(status_code=400, detail="days must be positive")
+        if request.num_posts > 50:
+            raise HTTPException(status_code=400, detail="num_posts cannot exceed 50")
+        
+        schedule_times = _compute_schedule_dates(request.num_posts, request.days)
+        
+        return {
+            "success": True, 
+            "schedule_times": schedule_times,
+            "num_posts": request.num_posts,
+            "days": request.days
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/batch/{batch_id}/schedule")
-async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest):
+async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest, current_user = Depends(get_current_user_dependency)):
     """Schedule all posts in a batch"""
     try:
         # Generate schedule times based on number of posts and days
@@ -1060,7 +1568,8 @@ async def schedule_batch_posts(batch_id: str, request: ScheduleBatchRequest):
             batch_id=batch_id,
             platforms=request.platforms,
             schedule_times=schedule_times,
-            days=request.days
+            days=request.days,
+            user_id=str(current_user.id)  # 🔧 Pass current user ID
         )
         
         if success:
@@ -1121,13 +1630,13 @@ class CalendarEventUpdateRequest(BaseModel):
 
 
 def get_calendar_service():
-    """Get calendar service with sync database session"""
+    """Get calendar service with a live DB session for the duration of the request.
+    Do not close the session here; the CalendarService methods manage transactions.
+    """
     from database import get_sync_db
     db = next(get_sync_db())
-    try:
-        return CalendarService(db)
-    finally:
-        db.close()
+    # IMPORTANT: Do not close here; callers need an active session
+    return CalendarService(db)
 
 
 @app.get("/api/calendar/events")
@@ -1135,7 +1644,8 @@ async def get_calendar_events(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     status: Optional[str] = None,
-    post_id: Optional[str] = None
+    post_id: Optional[str] = None,
+    current_user = Depends(get_current_user_dependency)
 ):
     """Get calendar events with optional filtering"""
     try:
@@ -1154,7 +1664,8 @@ async def get_calendar_events(
             start_date=parsed_start_date,
             end_date=parsed_end_date,
             status=status,
-            post_id=post_id
+            post_id=post_id,
+            user_id=str(current_user.id)
         )
         
         return {"success": True, "events": [event.dict() for event in events]}
@@ -1180,7 +1691,7 @@ async def get_calendar_event(event_id: str):
 
 
 @app.post("/api/calendar/events")
-async def create_calendar_event(request: CalendarEventRequest):
+async def create_calendar_event(request: CalendarEventRequest, current_user = Depends(get_current_user_dependency)):
     """Create a new calendar event"""
     try:
         calendar_service = get_calendar_service()
@@ -1194,7 +1705,8 @@ async def create_calendar_event(request: CalendarEventRequest):
             "location": request.location,
             "color": request.color,
             "reminder_minutes": request.reminder_minutes,
-            "post_id": request.post_id
+            "post_id": request.post_id,
+            "user_id": str(current_user.id)  # Add current user ID
         }
         
         event = calendar_service.create_event(event_data)
@@ -1282,15 +1794,221 @@ async def get_upcoming_events(days_ahead: int = 30):
         return {"success": False, "error": str(e)}
 
 
+@app.post("/api/calendar/sync-all-posts")
+async def sync_all_calendar_with_posts():
+    """Sync calendar events with scheduled posts for all users (no auth required)"""
+    try:
+        # Get all scheduled posts that don't have calendar events
+        scheduled_posts_query = """
+            SELECT p.id, p.user_id, p.campaign_name, p.original_description, p.caption, 
+                   p.scheduled_at, p.platforms
+            FROM posts p
+            LEFT JOIN calendar_events c ON c.post_id = p.id
+            WHERE p.status = 'scheduled' 
+              AND p.scheduled_at IS NOT NULL 
+              AND p.user_id IS NOT NULL
+              AND c.post_id IS NULL
+            ORDER BY p.scheduled_at ASC
+        """
+        
+        from database import db_manager
+        results = await db_manager.fetch_all(scheduled_posts_query)
+        
+        created_count = 0
+        failed_count = 0
+        
+        for post in results:
+            try:
+                # Create meaningful title from campaign name or description
+                event_title = ''
+                if post.get('campaign_name') and post['campaign_name'].strip():
+                    event_title = post['campaign_name'].strip()
+                elif post.get('original_description') and len(post['original_description'].strip()) > 10:
+                    desc = post['original_description'].strip()
+                    event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                elif post.get('caption') and post['caption'].strip():
+                    caption = post['caption'].strip()
+                    event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+                else:
+                    event_title = "Social Media Post"
+                
+                # Create calendar event
+                await db_service.create_calendar_event(
+                    post_id=str(post['id']),
+                    user_id=str(post['user_id']),
+                    title=event_title,
+                    description=post['caption'] or post['original_description'] or "",
+                    start_time=post['scheduled_at'],
+                    end_time=post['scheduled_at'],
+                    status='scheduled',
+                    platforms=post['platforms'] or []
+                )
+                
+                created_count += 1
+                print(f"🔄 Auto-synced calendar event for post {post['id']}: {event_title}")
+                
+            except Exception as post_error:
+                failed_count += 1
+                print(f"⚠️ Failed to sync calendar event for post {post['id']}: {post_error}")
+        
+        return {
+            "success": True, 
+            "stats": {
+                "created": created_count,
+                "failed": failed_count,
+                "message": f"Synced {created_count} calendar events, {failed_count} failed"
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error syncing all calendar with posts: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/calendar/sync-with-posts")
-async def sync_calendar_with_posts():
+async def sync_calendar_with_posts(current_user = Depends(get_current_user_dependency)):
     """Sync calendar events with scheduled posts"""
     try:
-        calendar_service = get_calendar_service()
-        stats = calendar_service.sync_with_posts()
+        # Get all scheduled posts for the current user that don't have calendar events
+        scheduled_posts_query = """
+            SELECT p.id, p.user_id, p.campaign_name, p.original_description, p.caption, 
+                   p.scheduled_at, p.platforms, p.image_path
+            FROM posts p
+            LEFT JOIN calendar_events c ON c.post_id = p.id
+            WHERE p.status = 'scheduled' 
+              AND p.scheduled_at IS NOT NULL 
+              AND p.user_id = :user_id
+              AND c.post_id IS NULL
+            ORDER BY p.scheduled_at ASC
+        """
         
-        return {"success": True, "stats": stats}
+        from database import db_manager
+        results = await db_manager.fetch_all(scheduled_posts_query, {"user_id": str(current_user.id)})
+        
+        created_count = 0
+        failed_count = 0
+        
+        for post in results:
+            try:
+                # Create meaningful title from campaign name or description
+                event_title = ''
+                if post.get('campaign_name') and post['campaign_name'].strip() and post['campaign_name'] != 'Untitled Campaign':
+                    event_title = post['campaign_name'].strip()
+                elif post.get('original_description') and len(post['original_description'].strip()) > 10:
+                    desc = post['original_description'].strip()
+                    # Avoid UUID-like strings
+                    if not (desc.startswith('Post ') and len(desc.split('-')) > 3):
+                        event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                    else:
+                        event_title = "Campaign Post"
+                elif post.get('caption') and post['caption'].strip():
+                    caption = post['caption'].strip()
+                    event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+                else:
+                    event_title = "Social Media Campaign"
+                
+                # Create calendar event
+                await db_service.create_calendar_event(
+                    post_id=str(post['id']),
+                    user_id=str(post['user_id']),
+                    title=event_title,
+                    description=post['caption'] or post['original_description'] or "",
+                    start_time=post['scheduled_at'],
+                    end_time=post['scheduled_at'],
+                    status='scheduled',
+                    platforms=post['platforms'] or []
+                )
+                
+                created_count += 1
+                print(f"✅ Created calendar event for post {post['id']}: {event_title}")
+                
+            except Exception as post_error:
+                failed_count += 1
+                print(f"❌ Failed to create calendar event for post {post['id']}: {post_error}")
+        
+        return {
+            "success": True, 
+            "stats": {
+                "created": created_count,
+                "failed": failed_count,
+                "message": f"Created {created_count} calendar events, {failed_count} failed"
+            }
+        }
+        
     except Exception as e:
+        print(f"Error syncing calendar with posts: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/calendar/auto-sync")
+async def auto_sync_calendar_events():
+    """Automatically sync calendar events for all users (called on startup)"""
+    try:
+        # Get all scheduled posts that don't have calendar events
+        scheduled_posts_query = """
+            SELECT p.id, p.user_id, p.campaign_name, p.original_description, p.caption, 
+                   p.scheduled_at, p.platforms
+            FROM posts p
+            LEFT JOIN calendar_events c ON c.post_id = p.id
+            WHERE p.status = 'scheduled' 
+              AND p.scheduled_at IS NOT NULL 
+              AND p.user_id IS NOT NULL
+              AND c.post_id IS NULL
+            ORDER BY p.scheduled_at ASC
+        """
+        
+        from database import db_manager
+        results = await db_manager.fetch_all(scheduled_posts_query)
+        
+        created_count = 0
+        failed_count = 0
+        
+        for post in results:
+            try:
+                # Create meaningful title from campaign name or description
+                event_title = ''
+                if post.get('campaign_name') and post['campaign_name'].strip():
+                    event_title = post['campaign_name'].strip()
+                elif post.get('original_description') and len(post['original_description'].strip()) > 10:
+                    desc = post['original_description'].strip()
+                    event_title = f"{desc[:50]}..." if len(desc) > 50 else desc
+                elif post.get('caption') and post['caption'].strip():
+                    caption = post['caption'].strip()
+                    event_title = f"{caption[:40]}..." if len(caption) > 40 else caption
+                else:
+                    event_title = "Social Media Post"
+                
+                # Create calendar event
+                await db_service.create_calendar_event(
+                    post_id=str(post['id']),
+                    user_id=str(post['user_id']),
+                    title=event_title,
+                    description=post['caption'] or post['original_description'] or "",
+                    start_time=post['scheduled_at'],
+                    end_time=post['scheduled_at'],
+                    status='scheduled',
+                    platforms=post['platforms'] or []
+                )
+                
+                created_count += 1
+                print(f"🔄 Auto-created calendar event for post {post['id']}: {event_title}")
+                
+            except Exception as post_error:
+                failed_count += 1
+                print(f"⚠️ Failed to auto-create calendar event for post {post['id']}: {post_error}")
+        
+        if created_count > 0:
+            print(f"✅ Auto-sync completed: Created {created_count} calendar events, {failed_count} failed")
+        
+        return {
+            "success": True, 
+            "stats": {
+                "created": created_count,
+                "failed": failed_count,
+                "message": f"Auto-created {created_count} calendar events"
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error in auto-sync calendar: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -1737,6 +2455,9 @@ async def get_reddit_post_analytics(post_id: str):
 # Twitter Analytics Endpoints
 from twitter_analytics_service import twitter_analytics_service
 
+# Instagram Analytics Endpoints
+from instagram_analytics_service import instagram_analytics_service
+
 @app.get("/api/twitter/account/info")
 async def get_twitter_account_info():
     """Get Twitter account information"""
@@ -1783,6 +2504,88 @@ async def get_twitter_post_replies(tweet_id: str, limit: int = 25):
     try:
         result = twitter_analytics_service.get_tweet_replies(tweet_id, limit=limit)
         return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# Instagram Analytics Endpoints
+
+@app.get("/api/instagram/account/info")
+async def get_instagram_account_info():
+    """Get Instagram account information"""
+    try:
+        result = instagram_analytics_service.get_account_info()
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/instagram/account/analytics")
+async def get_instagram_account_analytics():
+    """Get comprehensive Instagram account analytics"""
+    try:
+        result = instagram_analytics_service.get_comprehensive_analytics()
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/instagram/media")
+async def get_instagram_media(limit: int = 25):
+    """Get your Instagram media posts"""
+    try:
+        result = instagram_analytics_service.get_media_list(limit=limit)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/instagram/post/{media_id}/analytics")
+async def get_instagram_post_analytics(media_id: str):
+    """Get detailed analytics for a specific Instagram post"""
+    try:
+        result = instagram_analytics_service.get_post_analytics(media_id)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/instagram/insights/account")
+async def get_instagram_account_insights():
+    """Get Instagram account-level insights"""
+    try:
+        result = instagram_analytics_service.get_account_insights()
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/instagram/insights/media/{media_id}")
+async def get_instagram_media_insights(media_id: str):
+    """Get detailed insights for a specific Instagram media post"""
+    try:
+        result = instagram_analytics_service.get_media_insights(media_id)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/instagram/cache/clear")
+async def clear_instagram_cache():
+    """Clear Instagram analytics cache"""
+    try:
+        instagram_analytics_service.clear_cache()
+        return {"success": True, "message": "Instagram analytics cache cleared"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/instagram/cache/stats")
+async def get_instagram_cache_stats():
+    """Get Instagram analytics cache statistics"""
+    try:
+        result = instagram_analytics_service.get_cache_stats()
+        return {"success": True, "cache_stats": result}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -1978,10 +2781,10 @@ if __name__ == "__main__":
     else:
         print("✅ STABILITY_API_KEY configured")
         
-    if not NANO_BANANA_API_KEY:
-        print("⚠️  NANO_BANANA_API_KEY not found. Nano Banana (Google Gemini 2.5 Flash Image Preview) will not work.")
+    if not PIAPI_API_KEY:
+        print("⚠️  PIAPI_API_KEY (or NANO_BANANA_API_KEY) not found. PiAPI Gemini image generation will not work.")
     else:
-        print("✅ NANO_BANANA_API_KEY configured (Google Gemini 2.5 Flash Image Preview)")
+        print("✅ PIAPI_API_KEY configured (PiAPI Gemini image generation)")
     
     # Check Reddit API credentials
     reddit_client_id = os.getenv("REDDIT_CLIENT_ID")
@@ -2000,6 +2803,39 @@ if __name__ == "__main__":
     
     print("\n🚀 Starting Social Media Agent API...\n")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+# Trending topics endpoints
+from trending_topics_service import trending_service
+import logging
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+@app.get("/api/trending/ai-topics")
+async def get_ai_trending_topics(category: Optional[str] = None):
+    """Get AI-powered trending topics with optional category filter"""
+    try:
+        result = trending_service.get_trending_topics(category)
+        return result
+    except Exception as e:
+        logger.error(f"Error getting trending topics: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/trending/refresh")
+async def refresh_trending_topics():
+    """Force refresh trending topics (bypass cache)"""
+    try:
+        result = trending_service.refresh_topics()
+        return result
+    except Exception as e:
+        logger.error(f"Error refreshing trending topics: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 # Frontend serving - must be after all API routes
 @app.get("/api/info")

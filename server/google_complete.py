@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import os
 import json
 import io
+import time
 import requests
 from PIL import Image
 
@@ -33,10 +34,13 @@ def get_google_flow():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Credentials.json not found. Please create it with your Google Cloud credentials."
         )
+    # Allow configuring redirect URI to avoid redirect_uri_mismatch
+    redirect_uri = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:8000/callback')
+    print(f"Using Google OAuth redirect URI: {redirect_uri}")
     flow = Flow.from_client_secrets_file(
         'Credentials.json',
         scopes=SCOPES,
-        redirect_uri='http://localhost:8000/callback'
+        redirect_uri=redirect_uri
     )
     return flow
 
@@ -58,32 +62,209 @@ async def google_callback(code: str, flow: Flow = Depends(get_google_flow)):
     try:
         flow.fetch_token(code=code)
         credentials = flow.credentials
-        with open(TOKEN_FILE, 'w') as token:
-            token.write(credentials.to_json())
-        print("Successfully fetched and stored token.")
+        
+        # Ensure no corrupted token file exists before writing
+        if os.path.exists(TOKEN_FILE):
+            if os.path.isdir(TOKEN_FILE):
+                print(f"Removing corrupted token directory: {TOKEN_FILE}")
+                import shutil
+                try:
+                    shutil.rmtree(TOKEN_FILE)
+                except Exception as e:
+                    # Try to rename if removal fails
+                    backup_name = f"{TOKEN_FILE}_old_{int(time.time())}"
+                    try:
+                        os.rename(TOKEN_FILE, backup_name)
+                        print(f"Renamed corrupted directory to: {backup_name}")
+                    except Exception as rename_error:
+                        print(f"Failed to clean up corrupted token file: {rename_error}")
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Cannot clean up corrupted token file. Please check file permissions."
+                        )
+        
+        # Write token with robust, cross-platform-safe logic
+        temp_token_file = f"{TOKEN_FILE}.tmp"
+        try:
+            # Ensure parent directory exists
+            token_dir = os.path.dirname(TOKEN_FILE) or "."
+            os.makedirs(token_dir, exist_ok=True)
+
+            # Write to temp file first
+            with open(temp_token_file, 'w') as token:
+                token.write(credentials.to_json())
+                token.flush()  # Ensure data is written
+                os.fsync(token.fileno())  # Force write to disk
+
+            # Try to move temp -> final, handling EBUSY on some host/volume setups
+            last_error = None
+            for attempt in range(5):
+                try:
+                    # Remove existing token file/dir if present
+                    if os.path.exists(TOKEN_FILE):
+                        if os.path.isdir(TOKEN_FILE):
+                            import shutil
+                            shutil.rmtree(TOKEN_FILE)
+                        else:
+                            os.remove(TOKEN_FILE)
+                    # Prefer atomic replace
+                    try:
+                        os.replace(temp_token_file, TOKEN_FILE)
+                    except Exception:
+                        # Fallback to move if replace not available
+                        import shutil
+                        shutil.move(temp_token_file, TOKEN_FILE)
+                    print("Successfully fetched and stored token.")
+                    last_error = None
+                    break
+                except Exception as e:
+                    last_error = e
+                    print(f"Warning: failed to finalize token file (attempt {attempt+1}/5): {e}")
+                    time.sleep(0.3 * (attempt + 1))
+
+            if last_error is not None:
+                # If still failing, raise detailed error
+                raise last_error
+
+        except Exception as write_error:
+            # Clean up temp file if write failed
+            try:
+                if os.path.exists(temp_token_file):
+                    os.remove(temp_token_file)
+            except Exception:
+                pass
+            raise write_error
+            
     except Exception as e:
         print(f"Error fetching token: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching token: {e}"
         )
-    return RedirectResponse(url="http://localhost:5173/settings")
+    return RedirectResponse(url="http://localhost:8000/settings")
 
 @router.get("/google/status")
 async def get_google_status():
-    if os.path.exists(TOKEN_FILE):
-        return {"connected": True}
-    return {"connected": False}
+    """Report whether Google is actually connected.
+    We validate token.json contents (must be a file with a refresh_token),
+    not just existence, to avoid false positives.
+    """
+    try:
+        if not os.path.exists(TOKEN_FILE):
+            return {"connected": False}
+        if os.path.isdir(TOKEN_FILE):
+            # Corrupted state: a directory where a file should be
+            return {"connected": False, "error": "token_is_directory"}
+        # Try to parse token and check refresh_token
+        with open(TOKEN_FILE, "r") as f:
+            raw = f.read().strip() or "{}"
+            data = json.loads(raw)
+        has_refresh = bool(data.get("refresh_token"))
+        return {"connected": has_refresh}
+    except Exception as e:
+        # Any error -> treat as not connected
+        return {"connected": False, "error": str(e)}
+
+@router.post("/google/disconnect")
+async def disconnect_google():
+    """Remove token.json to fully disconnect Google account."""
+    try:
+        if os.path.exists(TOKEN_FILE):
+            if os.path.isdir(TOKEN_FILE):
+                import shutil
+                shutil.rmtree(TOKEN_FILE)
+            else:
+                os.remove(TOKEN_FILE)
+        return {"success": True, "message": "Disconnected from Google"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to disconnect: {e}")
 
 def get_google_service(service_name: str, version: str):
     creds = None
     if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-        if not creds.refresh_token:
-            os.remove(TOKEN_FILE)
+        # Enhanced token file corruption handling
+        try:
+            # Check if TOKEN_FILE is a directory instead of a file
+            if os.path.isdir(TOKEN_FILE):
+                print(f"Warning: {TOKEN_FILE} is a directory, not a file. Attempting to remove it.")
+                import shutil
+                try:
+                    shutil.rmtree(TOKEN_FILE)
+                    print(f"Successfully removed corrupted directory: {TOKEN_FILE}")
+                except PermissionError as e:
+                    print(f"Permission error removing directory {TOKEN_FILE}: {e}")
+                    # Try to rename it instead of removing
+                    backup_name = f"{TOKEN_FILE}_corrupted_{int(time.time())}"
+                    try:
+                        os.rename(TOKEN_FILE, backup_name)
+                        print(f"Renamed corrupted directory to: {backup_name}")
+                    except Exception as rename_error:
+                        print(f"Failed to rename corrupted directory: {rename_error}")
+                except Exception as e:
+                    print(f"Error removing corrupted token directory: {e}")
+                    # Try alternative cleanup method
+                    backup_name = f"{TOKEN_FILE}_corrupted_{int(time.time())}"
+                    try:
+                        os.rename(TOKEN_FILE, backup_name)
+                        print(f"Renamed corrupted directory to: {backup_name}")
+                    except Exception as rename_error:
+                        print(f"Failed to rename corrupted directory: {rename_error}")
+                
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Google token file was corrupted and has been cleaned up. Please reconnect your account."
+                )
+            
+            # Check if file is readable
+            if not os.access(TOKEN_FILE, os.R_OK):
+                print(f"Warning: {TOKEN_FILE} is not readable")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Google token file is not readable. Please reconnect your account."
+                )
+            
+            # Try to load credentials
+            try:
+                creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+            except json.JSONDecodeError as e:
+                print(f"Warning: {TOKEN_FILE} contains invalid JSON: {e}")
+                # Move corrupted file and create fresh one
+                backup_name = f"{TOKEN_FILE}_corrupted_{int(time.time())}"
+                try:
+                    os.rename(TOKEN_FILE, backup_name)
+                    print(f"Renamed corrupted token file to: {backup_name}")
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Google token file is corrupted (invalid JSON). Please reconnect your account."
+                )
+            except Exception as e:
+                print(f"Warning: Failed to load token file {TOKEN_FILE}: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=f"Failed to load Google token file: {str(e)}. Please reconnect your account."
+                )
+            
+            if not creds.refresh_token:
+                print(f"Warning: {TOKEN_FILE} missing refresh token")
+                try:
+                    os.remove(TOKEN_FILE)
+                except Exception as e:
+                    print(f"Failed to remove token file: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Missing refresh token. Please reconnect your account."
+                )
+                
+        except HTTPException:
+            # Re-raise HTTP exceptions
+            raise
+        except Exception as e:
+            print(f"Unexpected error handling token file: {e}")
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing refresh token. Please reconnect your account."
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Unexpected error with Google token file: {str(e)}"
             )
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:

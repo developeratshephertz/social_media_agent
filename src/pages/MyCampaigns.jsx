@@ -11,6 +11,8 @@ import PostEventModal from "../components/PostEventModal.jsx";
 import { useCampaignStore } from "../store/campaignStore.js";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { apiFetch, apiUrl } from "../lib/api.js";
+import apiClient from "../lib/apiClient.js";
 
 function statusColor(status) {
   if (status === "Posted") return "green";
@@ -39,8 +41,10 @@ function IconButton({ title, onClick, children, variant = "ghost" }) {
 function MyCampaigns() {
   const campaigns = useCampaignStore((s) => s.campaigns);
   const updateCampaign = useCampaignStore((s) => s.updateCampaign);
+  const deleteCampaign = useCampaignStore((s) => s.deleteCampaign);
   const deleteCampaignsWhere = useCampaignStore((s) => s.deleteCampaignsWhere);
   const loadCampaignsFromDB = useCampaignStore((s) => s.loadCampaignsFromDB);
+  const clearAllCampaigns = useCampaignStore((s) => s.clearAllCampaigns);
   const isLoading = useCampaignStore((s) => s.isLoading);
 
   const [scheduleForId, setScheduleForId] = useState(null);
@@ -54,7 +58,9 @@ function MyCampaigns() {
   const [isPostEventModalOpen, setIsPostEventModalOpen] = useState(false);
   const [batchCalendarView, setBatchCalendarView] = useState(null); // For batch-specific calendar
   const [platformScheduleModal, setPlatformScheduleModal] = useState(null); // For platform selection when scheduling
-  const [selectedPlatformsForScheduling, setSelectedPlatformsForScheduling] = useState([]); // Array of selected platforms
+  const [selectedPlatformsForScheduling, setSelectedPlatformsForScheduling] = useState([]);
+  const [schedulingMode, setSchedulingMode] = useState("basic"); // "basic" or "advanced"
+  const [platformsByPost, setPlatformsByPost] = useState({}); // For advanced mode per-post platforms
   const [subredditForScheduling, setSubredditForScheduling] = useState("");
   const [schedulingProgress, setSchedulingProgress] = useState({
     visible: false,
@@ -62,27 +68,101 @@ function MyCampaigns() {
     currentStep: 0,
     steps: ["Uploading to Drive", "Creating Calendar Events", "Finalizing"]
   });
+  const [deleteBatchConfirm, setDeleteBatchConfirm] = useState(null);
+  const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '', preset: 'all' });
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [incompletePostsModal, setIncompletePostsModal] = useState(null);
+  const [imageProvider, setImageProvider] = useState("stability");
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
 
-  // Handle platform selection for scheduling
-  const handlePlatformToggleForScheduling = (platform) => {
+  const handlePlatformToggle = (platform) => {
     setSelectedPlatformsForScheduling(prev => {
-      const newPlatforms = prev.includes(platform)
-        ? prev.filter(p => p !== platform)
-        : [...prev, platform];
-      return newPlatforms;
+      if (prev.includes(platform)) {
+        return prev.filter(p => p !== platform);
+      }
+      return [...prev, platform];
     });
   };
 
-  // Reset platform selection when modal opens
-  const openPlatformScheduleModal = (batch) => {
-    setSelectedPlatformsForScheduling([]);
-    setSubredditForScheduling("");
-    setPlatformScheduleModal(batch);
+  // Date filter handlers
+  const handleDateFilterPreset = (preset) => {
+    const now = new Date();
+    let startDate = '';
+    let endDate = '';
+
+    switch (preset) {
+      case 'today':
+        startDate = format(now, 'yyyy-MM-dd');
+        endDate = format(now, 'yyyy-MM-dd');
+        break;
+      case 'yesterday':
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        startDate = format(yesterday, 'yyyy-MM-dd');
+        endDate = format(yesterday, 'yyyy-MM-dd');
+        break;
+      case 'last7days':
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        startDate = format(weekAgo, 'yyyy-MM-dd');
+        endDate = format(now, 'yyyy-MM-dd');
+        break;
+      case 'last30days':
+        const monthAgo = new Date(now);
+        monthAgo.setDate(monthAgo.getDate() - 30);
+        startDate = format(monthAgo, 'yyyy-MM-dd');
+        endDate = format(now, 'yyyy-MM-dd');
+        break;
+      case 'thisMonth':
+        startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
+        endDate = format(now, 'yyyy-MM-dd');
+        break;
+      case 'lastMonth':
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        startDate = format(lastMonth, 'yyyy-MM-dd');
+        endDate = format(lastMonthEnd, 'yyyy-MM-dd');
+        break;
+      case 'all':
+      default:
+        startDate = '';
+        endDate = '';
+        break;
+    }
+
+    setDateFilter({ startDate, endDate, preset });
+  };
+
+  const clearDateFilter = () => {
+    setDateFilter({ startDate: '', endDate: '', preset: 'all' });
   };
 
   const batches = useMemo(() => {
+    // First filter campaigns by date if filter is active
+    let filteredCampaigns = campaigns;
+
+    if (dateFilter.startDate || dateFilter.endDate) {
+      filteredCampaigns = campaigns.filter(campaign => {
+        const createdAt = new Date(campaign.createdAt || Date.now());
+        const campaignDate = format(createdAt, 'yyyy-MM-dd');
+
+        let matchesFilter = true;
+
+        if (dateFilter.startDate) {
+          matchesFilter = matchesFilter && campaignDate >= dateFilter.startDate;
+        }
+
+        if (dateFilter.endDate) {
+          matchesFilter = matchesFilter && campaignDate <= dateFilter.endDate;
+        }
+
+        return matchesFilter;
+      });
+    }
+
+    // Group filtered campaigns into batches
     const map = new Map();
-    for (const c of campaigns) {
+    for (const c of filteredCampaigns) {
       const key = c.batchId || "single";
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(c);
@@ -93,7 +173,7 @@ function MyCampaigns() {
     return list.sort(
       (a, b) => (b.items[0]?.createdAt || 0) - (a.items[0]?.createdAt || 0)
     );
-  }, [campaigns]);
+  }, [campaigns, dateFilter]);
 
   const saveSchedule = () => {
     if (!scheduleDate || !scheduleTime) return;
@@ -114,47 +194,93 @@ function MyCampaigns() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete ${itemsToDelete.length} posts? This action cannot be undone.`)) {
-      return;
-    }
-
     try {
-      // Delete from backend first
-      const deletePromises = itemsToDelete.map(async (item) => {
+      // Best-effort delete any linked calendar events first
+      await Promise.allSettled(itemsToDelete.map(async (item) => {
         try {
-          const response = await fetch(`http://localhost:8000/api/posts/${item.id}`, {
-            method: 'DELETE'
-          });
-          const result = await response.json();
-          if (!result.success) {
-            console.error(`Failed to delete post ${item.id}:`, result.error);
-            return false;
+          // Method 1: Delete by calendarEventId if available
+          if (item.calendarEventId) {
+            await apiClient.deleteCalendarEvent(item.calendarEventId);
           }
-          return true;
-        } catch (error) {
-          console.error(`Error deleting post ${item.id}:`, error);
-          return false;
+          // Method 2: Delete by post_id to catch any events not linked via calendarEventId
+          const eventsResponse = await apiFetch(`/api/calendar/events/post/${item.id}`);
+          if (eventsResponse.ok) {
+            const eventsData = await eventsResponse.json();
+            if (eventsData.success && eventsData.events) {
+              for (const event of eventsData.events) {
+                await apiClient.deleteCalendarEvent(event.id);
+              }
+            }
+          }
+        } catch (eventError) {
+          console.warn(`Failed to delete calendar events for campaign ${item.id}:`, eventError);
         }
-      });
+      }));
 
-      const results = await Promise.all(deletePromises);
-      const successCount = results.filter(Boolean).length;
-      const failCount = results.length - successCount;
+      // Delete each campaign via store (optimistic + backend)
+      const results = await Promise.allSettled(itemsToDelete.map((item) => deleteCampaign(item.id)));
+      const failed = results.filter(r => r.status === 'rejected').length;
 
-      if (successCount > 0) {
-        toast.success(`Deleted ${successCount} posts`);
+      if (failed === 0) {
+        toast.success(`Deleted ${itemsToDelete.length} posts`);
+      } else if (failed < itemsToDelete.length) {
+        toast.warning(`Deleted ${itemsToDelete.length - failed} posts. ${failed} failed.`);
+      } else {
+        toast.error("Failed to delete posts");
       }
-      if (failCount > 0) {
-        toast.error(`Failed to delete ${failCount} posts`);
-      }
 
-      // Refresh campaigns from database to show current state
+      // Refresh campaigns from database to ensure consistency
       await loadCampaignsFromDB();
     } catch (error) {
       console.error("Error deleting batch:", error);
       toast.error("Failed to delete some items");
-      // Refresh anyway to show current state
       await loadCampaignsFromDB();
+    }
+  };
+
+  // Save entire batch as Draft (unschedule + keep)
+  const saveBatchAsDraft = async (batchId) => {
+    const itemsToDraft = campaigns.filter((c) =>
+      batchId === "single" ? !c.batchId : c.batchId === batchId
+    );
+    if (itemsToDraft.length === 0) {
+      toast.error("No items to update");
+      return;
+    }
+    try {
+      // For each item: clear schedule and set Draft
+      for (const item of itemsToDraft) {
+        try {
+          // Update local + DB via store helper
+          await updateCampaign(item.id, { status: "Draft", scheduledAt: null });
+
+          // Best-effort: delete any existing calendar events for the post
+          try {
+            // Method 1: Delete by calendarEventId if available
+            if (item.calendarEventId) {
+              await apiClient.deleteCalendarEvent(item.calendarEventId);
+            }
+            // Method 2: Delete by post_id to catch any events not linked via calendarEventId
+            const eventsResponse = await apiFetch(`/api/calendar/events/post/${item.id}`);
+            if (eventsResponse.ok) {
+              const eventsData = await eventsResponse.json();
+              if (eventsData.success && eventsData.events) {
+                for (const event of eventsData.events) {
+                  await apiClient.deleteCalendarEvent(event.id);
+                }
+              }
+            }
+          } catch (eventError) {
+            console.warn(`Failed to delete calendar events for campaign ${item.id}:`, eventError);
+          }
+        } catch (e) {
+          console.warn("Failed to save as draft:", item.id, e);
+        }
+      }
+      toast.success(`Saved ${itemsToDraft.length} posts as Draft`);
+    } catch (e) {
+      console.error("Batch draft save failed:", e);
+      toast.error("Failed to save items as Draft");
     }
   };
 
@@ -172,9 +298,8 @@ function MyCampaigns() {
   // Fetch calendar events from backend
   const fetchCalendarEvents = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/calendar/events");
-      const data = await response.json();
-      if (data.success) {
+      const data = await apiClient.getCalendarEvents();
+      if (data && data.success) {
         setCalendarEvents(data.events || []);
       }
     } catch (error) {
@@ -185,11 +310,9 @@ function MyCampaigns() {
   // Fetch posts from database to ensure calendar reflects database state
   const fetchDatabasePosts = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/posts?limit=50");
-      const data = await response.json();
-      if (data.success && data.posts) {
+      const data = await apiClient.getPosts({ limit: 50 });
+      if (data && data.success && data.posts) {
         console.log(`Fetched ${data.posts.length} posts from database`);
-        // Log database posts for debugging
         data.posts.forEach(post => {
           if (post.scheduled_at) {
             console.log(`Database post: ${post.original_description} scheduled for ${post.scheduled_at}`);
@@ -218,76 +341,111 @@ function MyCampaigns() {
     });
 
     try {
-      // Use the same scheduling logic as in CreateCampaign
-      const scheduleDates = (count) => {
-        const now = new Date();
-        const startTime = new Date(now);
-        startTime.setHours(now.getHours() + 1, 0, 0, 0);
+      const numPosts = draftItems.length;
+      let days = 2; // Default to 2 days
 
-        const out = [];
-        for (let i = 0; i < count; i++) {
-          let scheduleTime = new Date(startTime);
-          // Space posts 2 hours apart
-          scheduleTime.setHours(scheduleTime.getHours() + (i * 2));
-
-          // Don't schedule too late (before 10 PM)
-          if (scheduleTime.getHours() > 22) {
-            scheduleTime.setDate(scheduleTime.getDate() + 1);
-            scheduleTime.setHours(10, 0, 0, 0);
+      // Try to fetch the original days parameter from the batch operation
+      if (batchId && batchId !== "single") {
+        try {
+          const batchResponse = await apiFetch(`/api/batch/${batchId}/status`);
+          if (batchResponse.ok) {
+            const batchData = await batchResponse.json();
+            if (batchData.success && batchData.batch && batchData.batch.days_duration) {
+              days = batchData.batch.days_duration;
+              console.log(`📅 Retrieved original days parameter from batch: ${days}`);
+            }
           }
-
-          out.push(scheduleTime.toISOString());
+        } catch (error) {
+          console.warn(`Failed to fetch batch info for ${batchId}:`, error);
         }
-        return out;
-      };
+      }
 
-      const dates = scheduleDates(draftItems.length);
+      // Fallback logic if we couldn't get the original days parameter
+      if (days <= 0) {
+        if (numPosts <= 3) {
+          days = 1;
+        } else if (numPosts <= 6) {
+          days = 2;
+        } else if (numPosts <= 14) {
+          days = 7;
+        } else {
+          days = Math.ceil(numPosts / 3); // Distribute more posts across more days
+        }
+      }
+
+      // Use backend API for consistent scheduling logic
+      console.log(`📅 Getting schedule dates from backend for ${numPosts} posts across ${days} days`);
+      let dates;
+      try {
+        const scheduleResponse = await apiClient.generateScheduleDates({
+          num_posts: numPosts,
+          days: days
+        });
+
+        if (!scheduleResponse || !scheduleResponse.schedule_times) {
+          throw new Error('Failed to get schedule times from backend');
+        }
+
+        dates = scheduleResponse.schedule_times;
+        console.log(`✅ Retrieved ${dates.length} schedule times from backend:`);
+        dates.forEach((date, i) => {
+          console.log(`   Post ${i + 1}: ${new Date(date).toLocaleString()}`);
+        });
+      } catch (error) {
+        console.error('❌ Failed to get schedule from backend:', error);
+        toast.error('Failed to generate schedule times');
+        return;
+      }
 
       // Step 1: Update campaigns with schedule info
       setSchedulingProgress(prev => ({ ...prev, progress: 10, currentStep: 0 }));
 
-      // Update campaigns with schedule and platform
-      draftItems.forEach(async (item, i) => {
+      // Update campaigns with schedule and platform - use proper async loop instead of forEach
+      for (let i = 0; i < draftItems.length; i++) {
+        const item = draftItems[i];
+
+        // Determine platforms: use per-item platforms if present, else global selection; default to ["instagram"]
+        const platforms = (Array.isArray(item.platforms) && item.platforms.length > 0)
+          ? item.platforms
+          : (selectedPlatformsForScheduling && selectedPlatformsForScheduling.length > 0
+            ? selectedPlatformsForScheduling
+            : ["instagram"]);
+
         const updatedData = {
           scheduledAt: dates[i],
           status: "Scheduled",
-          platforms: selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling : [item.platform || "facebook"]
+          platforms: platforms
         };
 
         // Update local state
         updateCampaign(item.id, updatedData);
 
-        // Also update the database
+        // Use backend scheduling endpoint that automatically creates calendar events
         try {
-          const updateResponse = await fetch(`http://localhost:8000/api/posts/${item.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              scheduled_at: dates[i],
-              status: "scheduled",
-              platforms: selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling : [item.platform || "facebook"],
-              subreddit: selectedPlatformsForScheduling.includes("reddit") ? subredditForScheduling : null
-            })
+          const scheduleData = await apiClient.schedulePost(item.id, {
+            scheduled_at: dates[i],
+            status: "scheduled",
+            platforms,
+            subreddit: platforms.includes("reddit") ? (subredditForScheduling || null) : null
           });
 
-          if (updateResponse.ok) {
-            console.log(`📅 Campaign ${item.id} scheduled for ${new Date(dates[i]).toLocaleString()} on platforms: ${selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling.join(', ') : (item.platform || "facebook")}`);
+          if (scheduleData && scheduleData.success) {
+            console.log(`✅ Campaign ${item.id} scheduled for ${new Date(dates[i]).toLocaleString()} with automatic calendar event creation`);
           } else {
-            console.error(`Failed to update database for campaign ${item.id}`);
+            console.error(`❌ Failed to schedule campaign ${item.id}:`, scheduleData && scheduleData.error);
           }
-        } catch (dbUpdateError) {
-          console.error(`Database update error for campaign ${item.id}:`, dbUpdateError);
+        } catch (scheduleError) {
+          console.error(`❌ Schedule error for campaign ${item.id}:`, scheduleError);
         }
-      });
+      }
 
       setSchedulingProgress(prev => ({ ...prev, progress: 30, currentStep: 1 }));
 
       // Step 2: Check Google connection and upload to Google Drive
       let googleConnected = false;
       try {
-        const googleStatusResponse = await fetch("http://localhost:8000/google/status");
-        const googleStatusData = await googleStatusResponse.json();
-        googleConnected = googleStatusData.connected;
+        const googleStatusData = await apiClient.getGoogleStatus();
+        googleConnected = !!(googleStatusData && (googleStatusData.connected || googleStatusData.success));
         console.log(`Google connection status: ${googleConnected}`);
       } catch (error) {
         console.error("Failed to check Google status:", error);
@@ -302,7 +460,7 @@ function MyCampaigns() {
             // Ensure the imageUrl is in the correct format for backend access
             let processedImageUrl = item.imageUrl;
             if (processedImageUrl && processedImageUrl.startsWith('/public/')) {
-              processedImageUrl = `http://localhost:8000${processedImageUrl}`;
+              processedImageUrl = apiUrl(processedImageUrl);
             }
 
             const campaignData = {
@@ -311,19 +469,19 @@ function MyCampaigns() {
               generatedContent: item.generatedContent,
               scheduledAt: dates[i],
               status: "Scheduled",
-              platforms: selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling : [item.platform || "facebook"],
+              platform: selectedPlatformForScheduling || item.platform || "instagram",
               imageUrl: processedImageUrl,
               activity: [
                 { time: Date.now(), text: "Campaign created" },
                 { time: Date.now(), text: "AI caption generated" },
                 { time: Date.now(), text: "AI image generated" },
                 { time: Date.now(), text: "Campaign scheduled" },
-                { time: Date.now(), text: `Scheduled for ${selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling.join(', ') : (item.platform || "facebook")}` }
+                { time: Date.now(), text: `Scheduled for ${selectedPlatformForScheduling || item.platform || "instagram"}` }
               ]
             };
 
             console.log(`Uploading campaign ${item.id} to Google Drive...`);
-            const driveResponse = await fetch("http://localhost:8000/google-drive/save-campaign", {
+            const driveResponse = await apiFetch("/google-drive/save-campaign", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(campaignData)
@@ -363,98 +521,20 @@ function MyCampaigns() {
 
       setSchedulingProgress(prev => ({ ...prev, progress: 60, currentStep: 2 }));
 
-      // Step 3: Create calendar events for each scheduled item
-      for (let i = 0; i < draftItems.length; i++) {
-        const item = draftItems[i];
-        try {
-          const eventData = {
-            title: `📱 Post: ${item.productDescription?.substring(0, 50)}...`,
-            description: item.generatedContent || item.productDescription,
-            start_time: dates[i],
-            end_time: dates[i], // Point-in-time event matching scheduled time
-            color: "#3174ad",
-            post_id: item.id
-          };
-
-          const response = await fetch("http://localhost:8000/api/calendar/events", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(eventData)
-          });
-
-          if (response.ok) {
-            const calendarData = await response.json();
-            if (calendarData.success) {
-              updateCampaign(item.id, {
-                calendarEventId: calendarData.event?.id
-              });
-              console.log(`Calendar event created for campaign ${item.id}`);
-            }
-          } else {
-            console.error(`Failed to create calendar event for ${item.id}`);
-          }
-
-          // Also create Google Calendar event if connected
-          if (googleConnected) {
-            try {
-              const googleCalendarData = {
-                id: item.id,
-                productDescription: item.productDescription,
-                generatedContent: item.generatedContent,
-                scheduledAt: dates[i],
-                status: "Scheduled",
-                platforms: selectedPlatformsForScheduling.length > 0 ? selectedPlatformsForScheduling : [item.platform || "facebook"],
-                imageUrl: item.imageUrl,
-                driveImageUrl: item.driveImageUrl || item.imageUrl,
-                activity: [{ time: Date.now(), text: "Calendar event created" }]
-              };
-
-              console.log(`📅 Creating Google Calendar event for ${item.id}...`);
-              const googleCalendarResponse = await fetch("http://localhost:8000/google-calendar/create-event", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(googleCalendarData)
-              });
-
-              if (googleCalendarResponse.ok) {
-                const googleCalData = await googleCalendarResponse.json();
-                console.log(`Google Calendar response for ${item.id}:`, googleCalData);
-                if (googleCalData.success) {
-                  updateCampaign(item.id, {
-                    googleCalendarEventId: googleCalData.eventId,
-                    googleCalendarLink: googleCalData.eventLink
-                  });
-                  console.log(`✅ Google Calendar event created for campaign ${item.id}`);
-                } else {
-                  console.error(`❌ Google Calendar creation failed for ${item.id}:`, googleCalData.error || 'Unknown error');
-                }
-              } else {
-                const errorText = await googleCalendarResponse.text();
-                console.error(`❌ Failed to create Google Calendar event for ${item.id}: ${googleCalendarResponse.status} - ${errorText}`);
-              }
-            } catch (googleCalError) {
-              console.error(`❌ Google Calendar error for campaign ${item.id}:`, googleCalError);
-            }
-          }
-        } catch (error) {
-          console.error(`Error creating calendar event for ${item.id}:`, error);
-        }
-
-        // Update progress
-        const progress = 60 + ((i + 1) / draftItems.length) * 40;
-        setSchedulingProgress(prev => ({ ...prev, progress }));
-      }
+      // Refresh campaigns to get updated data after scheduling
+      console.log('🔄 Refreshing campaigns after scheduling...');
+      await loadCampaignsFromDB();
 
       // Step 4: Finalize
       setSchedulingProgress(prev => ({ ...prev, progress: 100, currentStep: 2 }));
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Refresh calendar events
+      // Refresh calendar events to show the ones automatically created by backend
       await fetchCalendarEvents();
 
       const successMessage = googleConnected
-        ? `Scheduled ${draftItems.length} draft posts, uploaded to Google Drive, and created calendar events!`
-        : `Scheduled ${draftItems.length} draft posts and created calendar events!`;
+        ? `Scheduled ${draftItems.length} posts and uploaded to Google Drive!`
+        : `Scheduled ${draftItems.length} posts!`;
 
       toast.success(successMessage);
 
@@ -472,9 +552,15 @@ function MyCampaigns() {
   // Calendar event handlers
   const handleCalendarEventCreate = async (eventData) => {
     try {
-      const response = await fetch("http://localhost:8000/api/calendar/events", {
+      const token = localStorage.getItem('auth-storage');
+      const authData = token ? JSON.parse(token) : null;
+      const headers = { "Content-Type": "application/json" };
+      if (authData?.state?.token) {
+        headers['Authorization'] = `Bearer ${authData.state.token}`;
+      }
+      const response = await apiFetch("/api/calendar/events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(eventData)
       });
 
@@ -491,9 +577,15 @@ function MyCampaigns() {
 
   const handleCalendarEventUpdate = async (eventId, updateData) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/calendar/events/${eventId}`, {
+      const token = localStorage.getItem('auth-storage');
+      const authData = token ? JSON.parse(token) : null;
+      const headers = { "Content-Type": "application/json" };
+      if (authData?.state?.token) {
+        headers['Authorization'] = `Bearer ${authData.state.token}`;
+      }
+      const response = await apiFetch(`/api/calendar/events/${eventId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(updateData)
       });
 
@@ -510,8 +602,15 @@ function MyCampaigns() {
 
   const handleCalendarEventDelete = async (eventId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/calendar/events/${eventId}`, {
-        method: "DELETE"
+      const token = localStorage.getItem('auth-storage');
+      const authData = token ? JSON.parse(token) : null;
+      const headers = {};
+      if (authData?.state?.token) {
+        headers['Authorization'] = `Bearer ${authData.state.token}`;
+      }
+      const response = await apiFetch(`/api/calendar/events/${eventId}`, {
+        method: "DELETE",
+        headers
       });
 
       const data = await response.json();
@@ -544,7 +643,140 @@ function MyCampaigns() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">My Campaigns</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowDateFilter(!showDateFilter)}
+            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${showDateFilter || dateFilter.preset !== 'all'
+              ? 'bg-blue-50 border-blue-200 text-blue-700'
+              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Filter by Date
+            {dateFilter.preset !== 'all' && (
+              <span className="ml-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                {dateFilter.preset === 'today' ? 'Today' :
+                  dateFilter.preset === 'yesterday' ? 'Yesterday' :
+                    dateFilter.preset === 'last7days' ? 'Last 7 days' :
+                      dateFilter.preset === 'last30days' ? 'Last 30 days' :
+                        dateFilter.preset === 'thisMonth' ? 'This month' :
+                          dateFilter.preset === 'lastMonth' ? 'Last month' : 'Custom'}
+              </span>
+            )}
+          </button>
+          {dateFilter.preset !== 'all' && (
+            <button
+              onClick={clearDateFilter}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Clear filter"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Date Filter Panel */}
+      {showDateFilter && (
+        <Card>
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900">Filter Campaigns by Creation Date</h3>
+              <button
+                onClick={() => setShowDateFilter(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Quick Presets */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Quick Filters</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 'all', label: 'All Time' },
+                  { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
+                  { value: 'last7days', label: 'Last 7 Days' },
+                  { value: 'last30days', label: 'Last 30 Days' },
+                  { value: 'thisMonth', label: 'This Month' },
+                  { value: 'lastMonth', label: 'Last Month' }
+                ].map(preset => (
+                  <button
+                    key={preset.value}
+                    onClick={() => handleDateFilterPreset(preset.value)}
+                    className={`px-3 py-2 text-sm rounded-lg border transition-colors ${dateFilter.preset === preset.value
+                      ? 'bg-blue-100 border-blue-300 text-blue-700'
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Date Range */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Custom Date Range</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">From Date</label>
+                  <input
+                    type="date"
+                    value={dateFilter.startDate}
+                    onChange={(e) => setDateFilter(prev => ({
+                      ...prev,
+                      startDate: e.target.value,
+                      preset: e.target.value || prev.endDate ? 'custom' : 'all'
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">To Date</label>
+                  <input
+                    type="date"
+                    value={dateFilter.endDate}
+                    onChange={(e) => setDateFilter(prev => ({
+                      ...prev,
+                      endDate: e.target.value,
+                      preset: prev.startDate || e.target.value ? 'custom' : 'all'
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Summary */}
+            {(dateFilter.startDate || dateFilter.endDate) && (
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm text-blue-800">
+                    Showing campaigns created {dateFilter.startDate && dateFilter.endDate
+                      ? `between ${format(new Date(dateFilter.startDate), 'MMM dd, yyyy')} and ${format(new Date(dateFilter.endDate), 'MMM dd, yyyy')}`
+                      : dateFilter.startDate
+                        ? `from ${format(new Date(dateFilter.startDate), 'MMM dd, yyyy')} onwards`
+                        : `up to ${format(new Date(dateFilter.endDate), 'MMM dd, yyyy')}`
+                    }
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Progress Bar for Scheduling */}
       {schedulingProgress.visible && (
@@ -562,149 +794,227 @@ function MyCampaigns() {
         </Card>
       )}
 
-      <Card title="Campaigns">
+      <Card title={`Campaigns ${dateFilter.preset !== 'all' ? `(${batches.length} ${batches.length === 1 ? 'batch' : 'batches'} found)` : ''}`}>
         <div className="divide-y">
-          {batches.map((b) => {
-            const total = b.items.length;
-            const scheduled = b.items.filter(
-              (x) => x.status === "Scheduled"
-            ).length;
-            const posted = b.items.filter((x) => x.status === "Posted").length;
-            const failed = b.items.filter((x) => x.status === "Failed").length;
-            const sample = b.items[0];
-            const name = sample?.productDescription || "Untitled Campaign";
-            const draft = b.items.filter((x) => x.status === "Draft").length;
-            const schedulingStatus = scheduled > 0 ? "Scheduled" : draft > 0 ? "Draft" : "Empty";
-            return (
-              <div
-                key={b.id}
-                className="flex items-center py-4 px-2"
+          {batches.length === 0 && dateFilter.preset !== 'all' ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">📅</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns found</h3>
+              <p className="text-gray-500 mb-4">
+                No campaigns were created in the selected date range.
+              </p>
+              <button
+                onClick={clearDateFilter}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="text-lg font-medium text-gray-900 truncate mb-1">{name}</div>
-                  <div className="text-sm text-gray-500">
-                    {total} posts • Created {new Date(sample?.createdAt || Date.now()).toLocaleDateString()}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Clear filter to show all campaigns
+              </button>
+            </div>
+          ) : batches.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">📋</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns yet</h3>
+              <p className="text-gray-500">Create your first campaign to get started.</p>
+            </div>
+          ) : (
+            batches.map((b) => {
+              const total = b.items.length;
+              const scheduled = b.items.filter(
+                (x) => x.status === "Scheduled"
+              ).length;
+              const posted = b.items.filter((x) => x.status === "Posted").length;
+              const failed = b.items.filter((x) => x.status === "Failed").length;
+              const sample = b.items[0];
+              const name = sample?.campaignName || sample?.productDescription || "Untitled Campaign";
+              const draft = b.items.filter((x) => x.status === "Draft").length;
+              // More descriptive status logic
+              let schedulingStatus;
+              if (posted === total && posted > 0) {
+                schedulingStatus = "Posted";
+              } else if (failed > 0 && (posted + failed) === total) {
+                schedulingStatus = posted > 0 ? "Partially Posted" : "Failed";
+              } else if (scheduled > 0 && draft > 0) {
+                schedulingStatus = "Partially Scheduled";
+              } else if (scheduled > 0) {
+                schedulingStatus = "Scheduled";
+              } else if (draft > 0) {
+                schedulingStatus = "Draft";
+              } else {
+                schedulingStatus = "Empty";
+              }
+              return (
+                <div
+                  key={b.id}
+                  className="flex items-center py-4 px-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-lg font-medium text-gray-900 truncate mb-1">{name}</div>
+                    <div className="text-sm text-gray-500">
+                      {total} posts • Created {new Date(sample?.createdAt || Date.now()).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <Badge color={
+                      schedulingStatus === "Posted" ? "blue" :
+                        schedulingStatus === "Partially Posted" ? "purple" :
+                          schedulingStatus === "Scheduled" ? "green" :
+                            schedulingStatus === "Partially Scheduled" ? "orange" :
+                              schedulingStatus === "Draft" ? "yellow" :
+                                schedulingStatus === "Failed" ? "red" : "gray"
+                    }>
+                      {schedulingStatus}
+                    </Badge>
+                    {/* Show Schedule button only if there are drafts AND no scheduled/posted posts */}
+                    {draft > 0 && scheduled === 0 && posted === 0 ? (
+                      // Blue Schedule button for campaigns with only drafts
+                      <button
+                        onClick={() => {
+                          // Check if any posts are missing images
+                          const postsWithoutImages = b.items.filter(item =>
+                            item.status === "Draft" && (!item.imageUrl || item.imageUrl === "")
+                          );
+
+                          if (postsWithoutImages.length > 0) {
+                            // Show image completion modal first
+                            setIncompletePostsModal({
+                              batch: b,
+                              postsWithoutImages: postsWithoutImages
+                            });
+                          } else {
+                            // All posts have images, proceed to scheduling
+                            setPlatformScheduleModal(b);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md border border-blue-600 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12,6 12,12 16,14" />
+                        </svg>
+                        Schedule
+                      </button>
+                    ) : scheduled > 0 ? (
+                      // Gray Scheduled button for campaigns that have any scheduled posts
+                      <button
+                        disabled
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md border border-gray-200 shadow-sm cursor-default"
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M9 12l2 2 4-4" />
+                          <circle cx="12" cy="12" r="10" />
+                        </svg>
+                        Scheduled
+                      </button>
+                    ) : posted > 0 ? (
+                      // Gray Posted button for campaigns that have posted content
+                      <button
+                        disabled
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-md border border-blue-200 shadow-sm cursor-default"
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M9 12l2 2 4-4" />
+                          <circle cx="12" cy="12" r="10" />
+                        </svg>
+                        Posted
+                      </button>
+                    ) : null}
+                    <IconButton title="View" onClick={() => setViewBatchId(b.id)}>
+                      {/* eye icon */}
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </IconButton>
+                    <IconButton
+                      title="View Calendar"
+                      onClick={() => setBatchCalendarView(b.id)}
+                    >
+                      {/* calendar icon */}
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                      </svg>
+                    </IconButton>
+                    <IconButton
+                      title="Delete"
+                      variant="danger"
+                      onClick={() => setDeleteBatchConfirm(b)}
+                    >
+                      {/* trash icon */}
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </IconButton>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <Badge color={schedulingStatus === "Scheduled" ? "green" : schedulingStatus === "Draft" ? "yellow" : "gray"}>
-                    {schedulingStatus}
-                  </Badge>
-                  {/* Always show Schedule button - blue for drafts, gray for scheduled */}
-                  {draft > 0 ? (
-                    // Blue Schedule button for campaigns with drafts
-                    <button
-                      onClick={() => openPlatformScheduleModal(b)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md border border-blue-600 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12,6 12,12 16,14" />
-                      </svg>
-                      Schedule
-                    </button>
-                  ) : (
-                    // Gray Scheduled button for campaigns that are already scheduled
-                    <button
-                      disabled
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md border border-gray-200 shadow-sm cursor-default"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path d="M9 12l2 2 4-4" />
-                        <circle cx="12" cy="12" r="10" />
-                      </svg>
-                      Scheduled
-                    </button>
-                  )}
-                  <IconButton title="View" onClick={() => setViewBatchId(b.id)}>
-                    {/* eye icon */}
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  </IconButton>
-                  <IconButton
-                    title="View Calendar"
-                    onClick={() => setBatchCalendarView(b.id)}
-                  >
-                    {/* calendar icon */}
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                    </svg>
-                  </IconButton>
-                  <IconButton
-                    title="Delete"
-                    variant="danger"
-                    onClick={() => deleteBatch(b.id)}
-                  >
-                    {/* trash icon */}
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                      <path d="M10 11v6" />
-                      <path d="M14 11v6" />
-                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                    </svg>
-                  </IconButton>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
-        {batches.length === 0 && (
-          <div className="text-center text-gray-500 py-10">No batches yet.</div>
-        )}
       </Card>
 
       <Modal
         open={!!viewBatchId}
         onOpenChange={(open) => !open && setViewBatchId(null)}
       >
-        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden">
+        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[95vw] max-w-6xl max-height-[90vh] overflow-hidden">
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <h2 className="text-xl font-semibold text-gray-900">Batch Details</h2>
             <IconButton title="Close" onClick={() => setViewBatchId(null)}>
@@ -763,7 +1073,7 @@ function MyCampaigns() {
                           </div>
                         </div>
                         <div className="text-sm font-medium text-gray-900 line-clamp-2">
-                          {c.productDescription}
+                          {c.campaignName || c.productDescription}
                         </div>
                         {c.generatedContent && (
                           <div className="text-xs text-gray-600 line-clamp-3 leading-relaxed">
@@ -778,6 +1088,50 @@ function MyCampaigns() {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {!!deleteBatchConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full">
+                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Delete {(deleteBatchConfirm.items || []).length} Post{(deleteBatchConfirm.items || []).length !== 1 ? 's' : ''}?
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  Are you sure you want to permanently delete {(deleteBatchConfirm.items || []).length > 1 ? 'these posts' : 'this post'}?
+                  This action cannot be undone and will remove all associated data including images, schedules, and calendar events.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => setDeleteBatchConfirm(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={async () => {
+                    const id = deleteBatchConfirm.id;
+                    setDeleteBatchConfirm(null);
+                    await deleteBatch(id);
+                  }}
+                  className="flex-1"
+                >
+                  Yes, Delete {(deleteBatchConfirm.items || []).length > 1 ? 'All' : 'It'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Modal
         open={!!scheduleForId}
@@ -819,7 +1173,11 @@ function MyCampaigns() {
               Calendar - {campaigns.find(c =>
                 batchCalendarView === "single"
                   ? !c.batchId
-                  : c.batchId === batchCalendarView
+                  : (c.batchId === batchCalendarView || c.id === batchCalendarView)
+              )?.campaignName || campaigns.find(c =>
+                batchCalendarView === "single"
+                  ? !c.batchId
+                  : (c.batchId === batchCalendarView || c.id === batchCalendarView)
               )?.productDescription || "Batch"}
             </h2>
             <IconButton title="Close" onClick={() => setBatchCalendarView(null)}>
@@ -839,189 +1197,313 @@ function MyCampaigns() {
               </svg>
             </IconButton>
           </div>
-          <div className="p-6 h-[calc(90vh-120px)]">
-            {batchCalendarView && (
-              <Calendar
-                events={allCalendarEvents.filter(event => {
-                  // Filter events to only show those from this batch
-                  const batchCampaigns = campaigns.filter(c =>
-                    batchCalendarView === "single"
-                      ? !c.batchId
-                      : c.batchId === batchCalendarView
-                  );
-                  const batchCampaignIds = batchCampaigns.map(c => c.id);
-                  return batchCampaignIds.includes(event.post_id);
-                })}
-                onEventCreate={handleCalendarEventCreate}
-                onEventUpdate={handleCalendarEventUpdate}
-                onEventDelete={handleCalendarEventDelete}
-                onEventSelect={(event) => {
-                  setSelectedPostEvent(event);
-                  setIsPostEventModalOpen(true);
-                }}
-                editable={true}
-                height={window.innerHeight - 200}
-              />
-            )}
+          <div className="p-6 h-[calc(90vh-120px)] overflow-hidden">
+            <div className="h-full overflow-y-auto">
+              {batchCalendarView && (
+                <Calendar
+                  events={(() => {
+                    console.log(`🔍 STARTING CALENDAR FILTER FOR BATCH: ${batchCalendarView}`);
+
+                    // Get campaigns for this specific batch or individual campaign
+                    const batchCampaigns = campaigns.filter(c => {
+                      if (batchCalendarView === "single") {
+                        return !c.batchId || c.batchId === null || c.batchId === undefined;
+                      } else {
+                        // More robust matching for batch ID
+                        const matchesBatchId = String(c.batchId) === String(batchCalendarView);
+                        const matchesId = String(c.id) === String(batchCalendarView);
+                        return matchesBatchId || matchesId;
+                      }
+                    });
+
+                    console.log(`📊 Found ${batchCampaigns.length} campaigns for batch ${batchCalendarView}`);
+                    if (batchCampaigns.length === 0) {
+                      console.log(`⚠️ No campaigns found for batch ${batchCalendarView}`);
+                      return [];
+                    }
+
+                    // Simple and robust filtering by post_id
+                    const batchPostIds = new Set(batchCampaigns.map(c => String(c.id)));
+
+                    const filteredEvents = allCalendarEvents.filter(event => {
+                      const eventPostId = String(event.post_id || '');
+                      return batchPostIds.has(eventPostId);
+                    });
+
+                    console.log(`✅ Returning ${filteredEvents.length} filtered events for batch ${batchCalendarView}`);
+                    if (filteredEvents.length === 0) {
+                      console.log(`⚠️ No events found for this batch`);
+                    }
+
+                    // If no events matched but we have campaigns, there might be a data sync issue
+                    if (batchCampaigns.length > 0 && filteredEvents.length === 0) {
+                      console.log(`❌ NO EVENTS MATCHED for batch with ${batchCampaigns.length} campaigns`);
+                      console.log(`🔧 This indicates calendar events may not be properly linked to posts`);
+                      return []; // Return empty array - don't show wrong events
+                    }
+
+                    return filteredEvents;
+                  })()}
+                  onEventCreate={handleCalendarEventCreate}
+                  onEventUpdate={handleCalendarEventUpdate}
+                  onEventDelete={handleCalendarEventDelete}
+                  onEventSelect={(event) => {
+                    setSelectedPostEvent(event);
+                    setIsPostEventModalOpen(true);
+                  }}
+                  editable={true}
+                  height={800}
+                />
+              )}
+            </div>
           </div>
         </div>
       </Modal>
 
-      {/* Multi-Platform Selection Modal for Scheduling */}
-      <Modal
-        open={!!platformScheduleModal}
-        onOpenChange={(open) => !open && setPlatformScheduleModal(null)}
-      >
-        <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl w-[90vw] max-w-lg">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Choose Platforms & Schedule</h2>
-            <IconButton title="Close" onClick={() => setPlatformScheduleModal(null)}>
-              {/* x icon */}
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </IconButton>
-          </div>
-          <div className="p-6">
-            {platformScheduleModal && (
-              <div className="space-y-6">
+      {/* Enhanced Scheduling Modal */}
+      {!!platformScheduleModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-full p-4 text-center">
+            {/* Backdrop */}
+            <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setPlatformScheduleModal(null)} />
+
+            {/* Modal */}
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-4">Select Platforms *</label>
+                  <h2 className="text-xl font-semibold text-gray-900">Schedule Campaign</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {platformScheduleModal.items[0]?.campaignName || platformScheduleModal.items[0]?.productDescription || "Untitled Campaign"} •
+                    {platformScheduleModal.items.filter(x => x.status === "Draft").length} draft posts
+                  </p>
+                </div>
+                <button
+                  onClick={() => setPlatformScheduleModal(null)}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
 
-                  {/* Platform Checkboxes */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { id: "facebook", name: "Facebook", icon: "/icons/facebook.png" },
-                      { id: "twitter", name: "X (Twitter)", icon: "/icons/x.png" },
-                      { id: "reddit", name: "Reddit", icon: "/icons/reddit.png" }
-                    ].map((platform) => (
-                      <label
-                        key={platform.id}
-                        className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${selectedPlatformsForScheduling.includes(platform.id)
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-300 hover:border-gray-400"
-                          }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedPlatformsForScheduling.includes(platform.id)}
-                          onChange={() => handlePlatformToggleForScheduling(platform.id)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <img src={platform.icon} alt={platform.name} className="w-5 h-5" />
-                        <span className="text-sm font-medium text-gray-900">{platform.name}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  {/* Subreddit input for Reddit posts */}
-                  {selectedPlatformsForScheduling.includes("reddit") && (
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Subreddit *</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={subredditForScheduling}
-                          onChange={(e) => setSubredditForScheduling(e.target.value)}
-                          placeholder="e.g., funny, technology"
-                          className="pl-8 pr-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
-                          required
-                        />
-                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                          <span className="text-gray-500 text-sm">r/</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-600 mt-1">
-                        Enter the subreddit name without "r/" prefix
+              {/* Content */}
+              <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+                {/* Mode Toggle */}
+                <div className="mb-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="text-left">
+                      <h3 className="text-lg font-semibold text-gray-900 text-left">Scheduling Mode</h3>
+                      <p className="text-sm text-gray-600 text-left">
+                        {schedulingMode === "basic"
+                          ? "Apply same platforms to all posts"
+                          : "You can customize the platform selection for each individual post."
+                        }
                       </p>
                     </div>
-                  )}
+                    <div className="flex items-center space-x-4 flex-shrink-0">
+                      <span className={`text-sm font-medium ${schedulingMode === "basic" ? "text-blue-600" : "text-gray-500"}`}>
+                        Basic
+                      </span>
+                      <button
+                        onClick={() => setSchedulingMode(schedulingMode === "basic" ? "advanced" : "basic")}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${schedulingMode === "advanced" ? "bg-blue-600" : "bg-gray-200"
+                          }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${schedulingMode === "advanced" ? "translate-x-6" : "translate-x-1"
+                            }`}
+                        />
+                      </button>
+                      <span className={`text-sm font-medium ${schedulingMode === "advanced" ? "text-blue-600" : "text-gray-500"}`}>
+                        Advanced
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Status Message */}
-                {selectedPlatformsForScheduling.length > 0 ? (
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-800">
-                      {platformScheduleModal.items.filter(x => x.status === "Draft").length} draft posts will be scheduled for:
-                    </p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {selectedPlatformsForScheduling.map((platform) => (
-                        <span
-                          key={platform}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
-                        >
-                          <img
-                            src={`/icons/${platform === 'twitter' ? 'x' : platform}.png`}
-                            alt={platform}
-                            className="w-3 h-3"
-                          />
-                          {platform === 'twitter' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1)}
-                        </span>
-                      ))}
-                      {selectedPlatformsForScheduling.includes("reddit") && subredditForScheduling && (
-                        <span className="text-xs text-blue-600">
-                          in r/{subredditForScheduling}
-                        </span>
+                {/* Basic Mode: Global Platform Selection */}
+                {schedulingMode === "basic" && (
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">Select Platforms (for all posts)</label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {[
+                          { id: "facebook", name: "Facebook", iconPath: "/icons/facebook.png", color: "bg-blue-50 border-blue-200 hover:bg-blue-100" },
+                          { id: "instagram", name: "Instagram", iconPath: "/icons/instagram.png", color: "bg-pink-50 border-pink-200 hover:bg-pink-100" },
+                          { id: "twitter", name: "X (Twitter)", iconPath: "/icons/x.png", color: "bg-gray-50 border-gray-200 hover:bg-gray-100" },
+                          { id: "reddit", name: "Reddit", iconPath: "/icons/reddit.png", color: "bg-orange-50 border-orange-200 hover:bg-orange-100" }
+                        ].map((platform) => (
+                          <label
+                            key={platform.id}
+                            className={`flex items-center space-x-3 p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${platform.color
+                              } ${selectedPlatformsForScheduling.includes(platform.id)
+                                ? 'ring-2 ring-blue-500 border-blue-500'
+                                : 'border-gray-200'
+                              }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedPlatformsForScheduling.includes(platform.id)}
+                              onChange={() => handlePlatformToggle(platform.id)}
+                              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <img src={platform.iconPath} alt={platform.name} className="w-6 h-6" />
+                            <span className="text-sm font-semibold text-gray-900">{platform.name}</span>
+                          </label>
+                        ))}
+                      </div>
+
+                      {/* Reddit subreddit input */}
+                      {selectedPlatformsForScheduling.includes("reddit") && (
+                        <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg flex flex-col items-center">
+                          <div className="w-full max-w-lg">
+                            <label className="block text-sm font-medium text-gray-700 mb-2 text-center">Subreddit (optional)</label>
+                            <input
+                              type="text"
+                              placeholder="e.g., r/technology, r/programming"
+                              value={subredditForScheduling}
+                              onChange={(e) => setSubredditForScheduling(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center"
+                            />
+                          </div>
+                          <p className="text-xs text-orange-600 mt-2 text-center">Leave empty to post to your profile</p>
+                        </div>
                       )}
                     </div>
                   </div>
-                ) : (
-                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-sm text-yellow-800">
-                      Please select at least one platform before scheduling.
-                    </p>
+                )}
+
+                {/* Advanced Mode: Per-Post Platform Selection */}
+                {schedulingMode === "advanced" && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+                      {platformScheduleModal.items.filter(item => item.status === "Draft").map((item, index) => (
+                        <div key={item.id} className="border border-gray-200 rounded-lg p-4 bg-white">
+                          <div className="mb-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                {index + 1}
+                              </div>
+                              <h4 className="font-semibold text-gray-900">Post {index + 1}</h4>
+                            </div>
+                            <p className="text-sm text-gray-600 line-clamp-2">
+                              {item.generatedContent || item.caption || item.productDescription}
+                            </p>
+                          </div>
+
+                          <div className="space-y-3">
+                            <label className="text-sm font-medium text-gray-700 text-center block">Select Platforms:</label>
+                            <div className="space-y-2 flex flex-col items-center">
+                              {[
+                                { key: 'facebook', name: 'Facebook', iconPath: '/icons/facebook.png' },
+                                { key: 'instagram', name: 'Instagram', iconPath: '/icons/instagram.png' },
+                                { key: 'reddit', name: 'Reddit', iconPath: '/icons/reddit.png' },
+                                { key: 'twitter', name: 'Twitter', iconPath: '/icons/x.png' }
+                              ].map(platform => (
+                                <label key={platform.key} className="flex items-center justify-center space-x-2 cursor-pointer w-full">
+                                  <input
+                                    type="checkbox"
+                                    checked={platformsByPost[item.id]?.includes(platform.key) || false}
+                                    onChange={() => {
+                                      setPlatformsByPost(prev => {
+                                        const current = prev[item.id] || [];
+                                        const updated = current.includes(platform.key)
+                                          ? current.filter(p => p !== platform.key)
+                                          : [...current, platform.key];
+                                        return { ...prev, [item.id]: updated };
+                                      });
+                                    }}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <img src={platform.iconPath} alt={platform.name} className="w-4 h-4" />
+                                  <span className="text-sm">{platform.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Reddit Subreddit Input for Advanced Mode */}
+                    {Object.values(platformsByPost).some(platforms => platforms?.includes('reddit')) && (
+                      <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg flex flex-col items-center">
+                        <div className="w-full max-w-lg">
+                          <label className="block text-sm font-medium text-gray-700 mb-2 text-center">Subreddit (optional)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., r/technology, r/programming"
+                            value={subredditForScheduling}
+                            onChange={(e) => setSubredditForScheduling(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center"
+                          />
+                        </div>
+                        <p className="text-xs text-orange-600 mt-2 text-center">Leave empty to post to your profile</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <div className="flex justify-end gap-3 pt-4">
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 mt-6">
                   <Button
                     variant="secondary"
                     onClick={() => setPlatformScheduleModal(null)}
-                    size="sm"
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={() => {
-                      if (selectedPlatformsForScheduling.length === 0) {
-                        toast.error("Please select at least one platform before scheduling");
-                        return;
-                      }
-                      if (selectedPlatformsForScheduling.includes("reddit") && !subredditForScheduling.trim()) {
-                        toast.error("Please enter a subreddit for Reddit posts");
-                        return;
-                      }
                       const batch = platformScheduleModal;
-                      setPlatformScheduleModal(null);
-                      // Update campaigns with selected platforms before scheduling
                       const draftItems = batch.items.filter(item => item.status === "Draft");
-                      draftItems.forEach(item => {
-                        updateCampaign(item.id, { platforms: selectedPlatformsForScheduling });
-                      });
-                      // Then schedule the batch
+
+                      if (schedulingMode === "basic") {
+                        // Basic mode: check global platform selection
+                        if (selectedPlatformsForScheduling.length === 0) {
+                          toast.error("Please select at least one platform");
+                          return;
+                        }
+                        // Update all draft items with selected platforms
+                        draftItems.forEach(item => {
+                          updateCampaign(item.id, { platforms: selectedPlatformsForScheduling });
+                        });
+                      } else {
+                        // Advanced mode: check individual platform selections
+                        const postsWithPlatforms = draftItems.filter(item =>
+                          platformsByPost[item.id] && platformsByPost[item.id].length > 0
+                        );
+                        if (postsWithPlatforms.length === 0) {
+                          toast.error("Please select platforms for at least one post");
+                          return;
+                        }
+                        // Update items with their individual platform selections
+                        draftItems.forEach(item => {
+                          if (platformsByPost[item.id] && platformsByPost[item.id].length > 0) {
+                            updateCampaign(item.id, { platforms: platformsByPost[item.id] });
+                          }
+                        });
+                      }
+
+                      setPlatformScheduleModal(null);
+                      // Then schedule the batch with full Google integration
                       scheduleBatch(batch.id, batch.items);
                     }}
-                    size="sm"
-                    disabled={selectedPlatformsForScheduling.length === 0}
+                    disabled={(
+                      schedulingMode === "basic"
+                        ? selectedPlatformsForScheduling.length === 0
+                        : !Object.values(platformsByPost).some(platforms => platforms && platforms.length > 0)
+                    )}
                   >
-                    Schedule
+                    {schedulingMode === "basic" ? "Schedule All Posts" : "Schedule Selected Posts"}
                   </Button>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
 
       {/* Custom Post Event Modal */}
       <PostEventModal
@@ -1034,6 +1516,215 @@ function MyCampaigns() {
         onEventUpdate={handleCalendarEventUpdate}
         onEventDelete={handleCalendarEventDelete}
       />
+
+      {/* Incomplete Posts Modal */}
+      {!!incompletePostsModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-full p-4 text-center">
+            {/* Backdrop */}
+            <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIncompletePostsModal(null)} />
+
+            {/* Modal */}
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Complete Image Selection</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {incompletePostsModal.postsWithoutImages.length} post{incompletePostsModal.postsWithoutImages.length > 1 ? 's' : ''} need{incompletePostsModal.postsWithoutImages.length === 1 ? 's' : ''} images before scheduling
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIncompletePostsModal(null)}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-yellow-900">Images Required</h3>
+                      <p className="text-sm text-yellow-800">
+                        Please add images to all posts before scheduling. You can generate AI images or upload your own.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Image Provider Selection */}
+                <div className="mb-6 flex items-center justify-center gap-3">
+                  <label className="text-sm font-medium text-gray-700">AI Image Provider:</label>
+                  <select
+                    value={imageProvider}
+                    onChange={(e) => setImageProvider(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
+                    disabled={isGeneratingImages}
+                  >
+                    <option value="stability">Stability AI</option>
+                    <option value="nano_banana">Nano Banana</option>
+                    <option value="chatgpt">ChatGPT</option>
+                  </select>
+                </div>
+
+                {/* Posts without images */}
+                <div className="space-y-4">
+                  {incompletePostsModal.postsWithoutImages.map((post, index) => (
+                    <div key={post.id} className="border border-gray-200 rounded-lg p-4 bg-white">
+                      <div className="mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                            {index + 1}
+                          </div>
+                          <h4 className="font-semibold text-gray-900">Post {index + 1}</h4>
+                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">No Image</span>
+                        </div>
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {post.generatedContent || post.caption || post.productDescription}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={async () => {
+                            setIsGeneratingImages(true);
+                            try {
+                              const imageData = await apiClient.generateImageOnly({
+                                description: post.generatedContent || post.caption || post.productDescription,
+                                image_provider: imageProvider,
+                              });
+
+                              if (imageData && imageData.image_path) {
+                                const imageUrl = apiUrl(imageData.image_path);
+                                await updateCampaign(post.id, { imageUrl });
+                                await loadCampaignsFromDB(); // Reload campaigns to reflect changes
+                                toast.success(`AI image generated for post ${index + 1}`);
+
+                                // Update the modal data
+                                setIncompletePostsModal(prev => ({
+                                  ...prev,
+                                  postsWithoutImages: prev.postsWithoutImages.filter(p => p.id !== post.id)
+                                }));
+                              } else {
+                                throw new Error('Failed to generate image');
+                              }
+                            } catch (error) {
+                              console.error('Failed to generate AI image:', error);
+                              toast.error(`Failed to generate image for post ${index + 1}`);
+                            } finally {
+                              setIsGeneratingImages(false);
+                            }
+                          }}
+                          disabled={isGeneratingImages}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          {isGeneratingImages ? 'Generating...' : 'Generate AI Image'}
+                        </button>
+
+                        <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer text-sm">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          Upload Image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                try {
+                                  const reader = new FileReader();
+                                  reader.onload = async (event) => {
+                                    try {
+                                      const uploadResponse = await apiClient.uploadCustomImage({
+                                        data_url: event.target.result,
+                                        description: post.generatedContent || post.caption || post.productDescription
+                                      });
+
+                                      if (uploadResponse && uploadResponse.success && uploadResponse.image_path) {
+                                        const imageUrl = apiUrl(uploadResponse.image_path);
+                                        await updateCampaign(post.id, { imageUrl });
+                                        await loadCampaignsFromDB(); // Reload campaigns to reflect changes
+                                        toast.success(`Image uploaded for post ${index + 1}`);
+
+                                        // Update the modal data
+                                        setIncompletePostsModal(prev => ({
+                                          ...prev,
+                                          postsWithoutImages: prev.postsWithoutImages.filter(p => p.id !== post.id)
+                                        }));
+                                      } else {
+                                        throw new Error('Failed to upload image');
+                                      }
+                                    } catch (error) {
+                                      console.error('Failed to upload image:', error);
+                                      toast.error(`Failed to upload image for post ${index + 1}`);
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                } catch (error) {
+                                  console.error('Failed to read file:', error);
+                                  toast.error('Failed to read image file');
+                                }
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-between items-center pt-6 border-t border-gray-200 mt-6">
+                  <div className="text-sm text-gray-600">
+                    {incompletePostsModal.postsWithoutImages.length === 0 ? (
+                      <span className="text-green-600 font-medium">✅ All posts have images!</span>
+                    ) : (
+                      <span>{incompletePostsModal.postsWithoutImages.length} post{incompletePostsModal.postsWithoutImages.length > 1 ? 's' : ''} still need{incompletePostsModal.postsWithoutImages.length === 1 ? 's' : ''} images</span>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setIncompletePostsModal(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (incompletePostsModal.postsWithoutImages.length === 0) {
+                          // All posts now have images, proceed to scheduling
+                          setIncompletePostsModal(null);
+                          setPlatformScheduleModal(incompletePostsModal.batch);
+                        } else {
+                          toast.error('Please add images to all posts before proceeding');
+                        }
+                      }}
+                      disabled={incompletePostsModal.postsWithoutImages.length > 0}
+                    >
+                      Proceed to Scheduling
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
