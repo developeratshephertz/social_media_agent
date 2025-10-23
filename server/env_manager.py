@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from pathlib import Path
 
 
@@ -200,6 +200,36 @@ class EnvManager:
             'available_keys': [key for key in platform_keys if key in env_vars and env_vars[key].strip()],
             'missing_keys': [key for key in platform_required if key not in env_vars or not env_vars[key].strip()]
         }
+    
+    def get_reddit_accounts_by_user(self, user_id: str) -> List[Dict]:
+        """
+        Get all Reddit accounts for a specific user from database
+        Returns list of dicts with account details
+        """
+        # For now, return empty list - will be implemented with actual database
+        # This is a placeholder for the database query
+        return []
+    
+    def save_reddit_account(self, user_id: str, reddit_user_id: str, 
+                           reddit_username: str, access_token: str, 
+                           refresh_token: str, expires_in: int, scopes: str):
+        """
+        Save or update Reddit account credentials in database
+        """
+        from datetime import datetime, timedelta
+        
+        expires_at = datetime.now() + timedelta(seconds=expires_in)
+        
+        # For now, just print - will be implemented with actual database
+        print(f"Would save Reddit account for user {user_id}: {reddit_username}")
+        print(f"Access token expires at: {expires_at}")
+        print(f"Scopes: {scopes}")
+        
+        # TODO: Implement actual database save
+        # This would be the database upsert query:
+        # INSERT INTO reddit_accounts (user_id, reddit_user_id, reddit_username, access_token, refresh_token, expires_at, scopes, updated_at)
+        # VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        # ON CONFLICT (user_id, reddit_user_id) DO UPDATE SET ...
 
 
 # Global instance - use .env in current directory

@@ -28,7 +28,7 @@ class RedditService:
         self.api_base = "https://oauth.reddit.com"
         
         self._initialize_adapter()
-
+    
     def _initialize_adapter(self):
         """Initialize Reddit adapter with token management"""
         try:
@@ -52,7 +52,7 @@ class RedditService:
         try:
             if self.token_service.test_connection():
                 return {"status": "connected", "message": "Reddit connection successful"}
-            else:
+                        else:
                 return {"status": "disconnected", "message": "Reddit connection failed"}
         except Exception as e:
             return {"status": "error", "message": f"Reddit connection error: {e}"}
@@ -85,15 +85,15 @@ class RedditService:
                 result = response.json()
                 if result.get('success'):
                     post_url = f"https://reddit.com{result['data']['url']}"
-                    return {
-                        "success": True,
+            return {
+                "success": True,
                         "message": "Post submitted successfully",
                         "url": post_url,
                         "post_id": result['data']['id']
-                    }
+            }
                 else:
-                    return {
-                        "success": False,
+            return {
+                "success": False,
                         "message": f"Reddit API error: {result.get('errors', 'Unknown error')}"
                     }
             else:
@@ -155,7 +155,7 @@ class RedditService:
                     "success": False,
                     "message": f"HTTP error: {response.status_code} - {response.text}"
                 }
-
+                
         except Exception as e:
             logger.error(f"❌ Error getting Reddit analytics: {e}")
             return {"success": False, "message": f"Analytics error: {e}"}
@@ -176,10 +176,10 @@ class RedditService:
                     "auto_refresh": "Access token will auto-refresh when needed"
                 }
             else:
-                return {
+            return {
                     "status": "disconnected", 
                     "message": "Reddit connection failed"
-                }
+            }
         except Exception as e:
             return {
                 "status": "error",
