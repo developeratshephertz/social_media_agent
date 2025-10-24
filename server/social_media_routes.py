@@ -29,6 +29,11 @@ class ConnectionResponse(BaseModel):
     connected: bool
     message: str
     error: Optional[str] = None
+
+class OAuth2Response(BaseModel):
+    auth_url: str
+    success: bool = True
+    message: str = "OAuth2 flow initiated"
  
 class StatusResponse(BaseModel):
     connected: bool
@@ -39,7 +44,7 @@ class StatusResponse(BaseModel):
  
 FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID")
 FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET")
-FACEBOOK_REDIRECT_URI = "https://localhost:8000/facebook/callback"
+FACEBOOK_REDIRECT_URI = "http://localhost:8000/facebook/callback"
  
 # Platform connection testers
 async def test_facebook_connection(user_id: Optional[str] = None) -> Dict[str, Any]:
@@ -243,7 +248,7 @@ async def get_platform_status(platform: str):
             details={"error": str(e)}
         )
  
-@router.post("/{platform}/connect", response_model=ConnectionResponse)
+@router.post("/{platform}/connect")
 async def connect_platform(platform: str, credentials: Dict[str, str] = {}):
     """Connect to a social media platform by saving credentials"""
     if platform not in ["facebook", "instagram", "twitter", "reddit"]:
@@ -258,7 +263,7 @@ async def connect_platform(platform: str, credentials: Dict[str, str] = {}):
                 f"&scope=pages_show_list,pages_read_engagement,pages_manage_posts"
                 f"&response_type=code"
             )
-            return {"auth_url": auth_url}
+            return OAuth2Response(auth_url=auth_url)
  
         # ----- INSTAGRAM FLOW -----
         if platform == "instagram":
@@ -269,14 +274,14 @@ async def connect_platform(platform: str, credentials: Dict[str, str] = {}):
                 f"&scope=instagram_basic,instagram_manage_insights,instagram_manage_messages"
                 f"&response_type=code"
             )
-            return {"auth_url": auth_url}
+            return OAuth2Response(auth_url=auth_url)
         
         # ----- REDDIT FLOW -----
         if platform == "reddit":
             # Generate random state for CSRF protection
             state = secrets.token_urlsafe(32)
             auth_url = get_reddit_auth_url(state)
-            return {"auth_url": auth_url}
+            return OAuth2Response(auth_url=auth_url)
  
         # ----- OTHER PLATFORMS -----
         required_fields = {
