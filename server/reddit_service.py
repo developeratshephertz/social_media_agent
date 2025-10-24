@@ -85,15 +85,15 @@ class RedditService:
                 result = response.json()
                 if result.get('success'):
                     post_url = f"https://reddit.com{result['data']['url']}"
-            return {
-                "success": True,
+                    return {
+                        "success": True,
                         "message": "Post submitted successfully",
                         "url": post_url,
                         "post_id": result['data']['id']
-            }
+                    }
                 else:
-            return {
-                "success": False,
+                    return {
+                        "success": False,
                         "message": f"Reddit API error: {result.get('errors', 'Unknown error')}"
                     }
             else:
@@ -176,10 +176,10 @@ class RedditService:
                     "auto_refresh": "Access token will auto-refresh when needed"
                 }
             else:
-            return {
+                return {
                     "status": "disconnected", 
                     "message": "Reddit connection failed"
-            }
+                }
         except Exception as e:
             return {
                 "status": "error",

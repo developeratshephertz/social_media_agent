@@ -39,8 +39,8 @@ def get_reddit_auth_url(state: str, scopes: List[str] = None) -> str:
         f"&duration=permanent"  # Request permanent refresh token
         f"&scope={scope_string}"
     )
-        
-        return auth_url
+    
+    return auth_url
     
 def exchange_code_for_tokens(code: str) -> Dict:
     """
