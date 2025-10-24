@@ -57,12 +57,12 @@ def exchange_code_for_tokens(code: str) -> Dict:
     auth_bytes = auth_string.encode('ascii')
     auth_base64 = base64.b64encode(auth_bytes).decode('ascii')
     
-        headers = {
+    headers = {
         "Authorization": f"Basic {auth_base64}",
         "User-Agent": REDDIT_USER_AGENT
-        }
-        
-        data = {
+    }
+    
+    data = {
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": REDDIT_REDIRECT_URI
@@ -74,7 +74,7 @@ def exchange_code_for_tokens(code: str) -> Dict:
         data=data
     )
     
-            response.raise_for_status()
+    response.raise_for_status()
     return response.json()
 
 def refresh_access_token(refresh_token: str) -> Dict:
@@ -90,8 +90,8 @@ def refresh_access_token(refresh_token: str) -> Dict:
     auth_string = f"{REDDIT_CLIENT_ID}:{REDDIT_CLIENT_SECRET}"
     auth_bytes = auth_string.encode('ascii')
     auth_base64 = base64.b64encode(auth_bytes).decode('ascii')
-        
-        headers = {
+    
+    headers = {
         "Authorization": f"Basic {auth_base64}",
         "User-Agent": REDDIT_USER_AGENT
     }
@@ -107,7 +107,7 @@ def refresh_access_token(refresh_token: str) -> Dict:
         data=data
     )
     
-            response.raise_for_status()
+    response.raise_for_status()
     return response.json()
 
 def get_reddit_user_info(access_token: str) -> Dict:
