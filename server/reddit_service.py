@@ -52,7 +52,7 @@ class RedditService:
         try:
             if self.token_service.test_connection():
                 return {"status": "connected", "message": "Reddit connection successful"}
-                        else:
+            else:
                 return {"status": "disconnected", "message": "Reddit connection failed"}
         except Exception as e:
             return {"status": "error", "message": f"Reddit connection error: {e}"}
