@@ -258,7 +258,7 @@ async def connect_platform(platform: str, credentials: Dict[str, str] = {}):
                 f"&scope=pages_show_list,pages_read_engagement,pages_manage_posts"
                 f"&response_type=code"
             )
-            return RedirectResponse(auth_url)
+            return {"auth_url": auth_url}
  
         # ----- INSTAGRAM FLOW -----
         if platform == "instagram":
@@ -269,14 +269,14 @@ async def connect_platform(platform: str, credentials: Dict[str, str] = {}):
                 f"&scope=instagram_basic,instagram_manage_insights,instagram_manage_messages"
                 f"&response_type=code"
             )
-            return RedirectResponse(auth_url)
+            return {"auth_url": auth_url}
         
         # ----- REDDIT FLOW -----
         if platform == "reddit":
             # Generate random state for CSRF protection
             state = secrets.token_urlsafe(32)
             auth_url = get_reddit_auth_url(state)
-            return RedirectResponse(auth_url)
+            return {"auth_url": auth_url}
  
         # ----- OTHER PLATFORMS -----
         required_fields = {

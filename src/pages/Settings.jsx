@@ -224,8 +224,75 @@ function Settings() {
     }
   };
 
-  const handleSocialMediaConnect = (platform) => {
-    setSocialMediaModal({ open: true, platform });
+  const handleSocialMediaConnect = async (platform) => {
+    try {
+      setLoading(true);
+      
+      // For Facebook and Reddit, use OAuth2 flow
+      if (platform === 'facebook' || platform === 'reddit') {
+        // Make API call to initiate OAuth2 flow
+        const response = await apiFetch(`/social-media/${platform}/connect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+          // The backend returns JSON with auth_url
+          const data = await response.json();
+          const authUrl = data.auth_url;
+          const authWindow = window.open(
+            authUrl,
+            `${platform}Auth`,
+            "width=500,height=600,scrollbars=yes,resizable=yes"
+          );
+          
+          // Poll for connection status
+          const pollInterval = setInterval(async () => {
+            if (authWindow.closed) {
+              clearInterval(pollInterval);
+              await checkAllSocialMediaStatus();
+              setLoading(false);
+              return;
+            }
+            
+            try {
+              const statusResponse = await apiFetch(`/social-media/${platform}/status`);
+              const statusData = await statusResponse.json();
+              if (statusData.connected) {
+                setPlatformStatus(prev => ({
+                  ...prev,
+                  [platform]: { connected: true, checking: false }
+                }));
+                clearInterval(pollInterval);
+                authWindow.close();
+                toast.success(`Successfully connected to ${platform.charAt(0).toUpperCase() + platform.slice(1)}!`);
+                setLoading(false);
+              }
+            } catch (error) {
+              // Continue polling
+            }
+          }, 2000);
+          
+          // Stop polling after 60 seconds
+          setTimeout(() => {
+            clearInterval(pollInterval);
+            if (!authWindow.closed) {
+              authWindow.close();
+            }
+            setLoading(false);
+          }, 60000);
+        } else {
+          throw new Error('Failed to initiate OAuth flow');
+        }
+      } else {
+        // For other platforms (Twitter, Instagram), use the modal approach
+        setSocialMediaModal({ open: true, platform });
+      }
+    } catch (error) {
+      console.error(`Failed to connect to ${platform}:`, error);
+      toast.error(`Failed to connect to ${platform}: ${error.message}`);
+      setLoading(false);
+    }
   };
 
   const handleSocialMediaDisconnect = async (platform) => {
